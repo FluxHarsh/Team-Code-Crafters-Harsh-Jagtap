@@ -1,7 +1,19 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@/store'
-import type { WSEvent, AgentNodeKey, AgentRunEntry, Risk, RoadmapTask, ChatMessage } from '@/types'
+import type {
+  WSEvent,
+  AgentNodeKey,
+  AgentRunEntry,
+  Risk,
+  RoadmapTask,
+  ChatMessage,
+  PlannerSuggestion,
+  GitHubInsight,
+  TeamMember,
+  ProjectFile,
+  Project,
+} from '@/types'
 import { generateId } from '@/lib/utils'
 
 export function useProjectSocket(projectId: string | undefined) {
@@ -18,6 +30,14 @@ export function useProjectSocket(projectId: string | undefined) {
     updateTask,
     patchProject,
     appendCoachMessage,
+    // v2
+    appendPersonalMessage,
+    appendGroupMessage,
+    addPlannerSuggestion,
+    markPlannerSuggestionAccepted,
+    addGithubInsight,
+    upsertTeamMember,
+    upsertFile,
   } = useStore()
 
   const handleEvent = useCallback(
@@ -91,15 +111,99 @@ export function useProjectSocket(projectId: string | undefined) {
         }
 
         case 'chat_message': {
+          // Legacy single-thread coaching event. Kept for backward
+          // compatibility during the v1 → v2 transition; the backend now
+          // prefers 'personal_chat_message' / 'group_chat_message' below.
           const msg = event.payload as unknown as ChatMessage
-          if (!msg.phase || msg.phase === 'coaching') {
+          if (!msg.phase || (msg.phase !== 'personal' && msg.phase !== 'group')) {
             appendCoachMessage({ ...msg, id: msg.id || generateId() })
           }
           break
         }
+
+        // ─── v2 events ──────────────────────────────────────────────────
+
+        case 'planner_revision_created': {
+          // A new planner draft/feedback version was produced — refetch
+          // the draft/history rather than trying to patch it in place.
+          queryClient.invalidateQueries({ queryKey: ['plan-draft', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['planner-history', projectId] })
+          break
+        }
+
+        case 'planner_suggestion_created': {
+          const suggestion = event.payload.suggestion as PlannerSuggestion
+          addPlannerSuggestion(suggestion)
+          break
+        }
+
+        case 'planner_suggestion_accepted': {
+          const { suggestion_id, updated_roadmap } = event.payload as {
+            suggestion_id: string
+            updated_roadmap?: RoadmapTask[]
+          }
+          markPlannerSuggestionAccepted(suggestion_id)
+          if (updated_roadmap) patchProject({ roadmap: updated_roadmap })
+          break
+        }
+
+        case 'github_insight_created': {
+          const insight = event.payload.insight as GitHubInsight
+          addGithubInsight(insight)
+          break
+        }
+
+        case 'project_context_updated': {
+          // Project moved through the context-gathering flow (was 'intake')
+          queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+          const patch = event.payload as Partial<Project>
+          patchProject(patch)
+          break
+        }
+
+        case 'file_processed': {
+          const file = event.payload.file as ProjectFile
+          upsertFile(file)
+          break
+        }
+
+        case 'team_updated': {
+          const member = event.payload.member as TeamMember
+          upsertTeamMember(member)
+          break
+        }
+
+        case 'group_chat_message': {
+          const msg = event.payload as unknown as ChatMessage
+          appendGroupMessage({ ...msg, id: msg.id || generateId(), phase: 'group' })
+          break
+        }
+
+        case 'personal_chat_message': {
+          const msg = event.payload as unknown as ChatMessage
+          appendPersonalMessage({ ...msg, id: msg.id || generateId(), phase: 'personal' })
+          break
+        }
       }
     },
-    [projectId, queryClient, setActiveNode, addRun, addRisk, resolveRisk, updateTask, patchProject, appendCoachMessage]
+    [
+      projectId,
+      queryClient,
+      setActiveNode,
+      addRun,
+      addRisk,
+      resolveRisk,
+      updateTask,
+      patchProject,
+      appendCoachMessage,
+      appendPersonalMessage,
+      appendGroupMessage,
+      addPlannerSuggestion,
+      markPlannerSuggestionAccepted,
+      addGithubInsight,
+      upsertTeamMember,
+      upsertFile,
+    ]
   )
 
   const connect = useCallback(() => {

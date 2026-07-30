@@ -1,168 +1,133 @@
-import { Link, Outlet, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { MessageSquare, Bell, LayoutDashboard, GitBranch } from 'lucide-react'
-import { useStore } from '@/store'
+import { useEffect } from 'react'
+import { NavLink as RouterNavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  Users,
+  MessageCircle,
+  MessagesSquare,
+  Lightbulb,
+  Github,
+  Rocket,
+  Wifi,
+  WifiOff,
+} from 'lucide-react'
 import { useProject } from '@/hooks/useProject'
 import { useProjectSocket } from '@/hooks/useProjectSocket'
-import { AGENT_LIST } from '@/lib/agents'
-import { formatHours } from '@/lib/utils'
-import { AgentNavItem } from './AgentNavItem'
-import { CoachChatPanel } from '@/components/chat/CoachChatPanel'
-import { SkeletonTile } from '@/components/ui'
+import { useStore } from '@/store'
+import { cn } from '@/lib/utils'
+
+const NAV_ITEMS = [
+  { to: '', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: 'team', label: 'Team', icon: Users },
+  { to: 'chat/personal', label: 'Coach', icon: MessageCircle },
+  { to: 'chat/group', label: 'Group Chat', icon: MessagesSquare },
+  { to: 'suggestions', label: 'Suggestions', icon: Lightbulb },
+  { to: 'github', label: 'GitHub Insights', icon: Github },
+  { to: 'pitch', label: 'Pitch', icon: Rocket },
+] as const
 
 export function DashboardShell() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const location = useLocation()
+  const { data: project, isLoading, isError } = useProject(projectId)
+  const wsConnected = useStore((s) => s.wsConnected)
 
-  const { data: project, isLoading } = useProject(projectId)
-  const { wsConnected, toggleChatPanel } = useStore()
-
-  // Establish WebSocket
   useProjectSocket(projectId)
 
-  // Route guard
-  if (!isLoading && project) {
-    if (project.status === 'intake') {
-      navigate(`/projects/${projectId}/ingest`, { replace: true })
-    } else if (project.status === 'planning') {
-      navigate(`/projects/${projectId}/plan`, { replace: true })
+  // ─── Route guard ──────────────────────────────────────────────────────
+  // FIXED: navigate() must never be called directly in the render body —
+  // doing so throws "Cannot update a component while rendering a different
+  // component" and can cause redirect loops. It now runs inside an effect,
+  // gated on the query actually having settled.
+  useEffect(() => {
+    if (!projectId) {
+      navigate('/', { replace: true })
+      return
     }
+    if (isError) {
+      navigate('/', { replace: true })
+      return
+    }
+    if (!isLoading && project) {
+      // v2: status enum renamed 'intake' → 'project_context'
+      if (project.status === 'project_context') {
+        navigate(`/projects/${projectId}/context`, { replace: true })
+      } else if (project.status === 'planning') {
+        navigate(`/projects/${projectId}/plan`, { replace: true })
+      }
+    }
+  }, [projectId, isLoading, isError, project, navigate])
+
+  if (isLoading || !project) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg">
+        <div className="skeleton h-8 w-48" />
+      </div>
+    )
   }
 
-  const isOverview = location.pathname === `/projects/${projectId}/dashboard`
-  const isPitch = location.pathname.includes('/pitch')
-
   return (
-    <div className="flex h-screen overflow-hidden bg-bg">
-      {/* ── Sidebar ── */}
-      <aside className="w-[220px] flex-none bg-white border-r border-border flex flex-col overflow-y-auto">
-        {/* Brand */}
-        <div className="px-4 py-4 flex items-center gap-2.5 border-b border-border-soft">
-          <div className="w-7 h-7 rounded-[9px] bg-primary flex items-center justify-center font-800 text-white text-xs shadow-md shadow-primary/30 flex-none">
-            HC
+    <div className="flex h-screen bg-bg">
+      <aside className="flex w-60 flex-col border-r border-border bg-card">
+        <div className="flex items-center gap-2 px-5 py-5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
+            {project.name.slice(0, 1).toUpperCase()}
           </div>
-          <div>
-            <p className="text-sm font-800 text-navy leading-none">Coach</p>
-            <p className="text-[10px] text-muted-2 mt-0.5">
-              {isLoading ? (
-                <SkeletonTile className="h-2.5 w-20 inline-block" />
-              ) : (
-                project?.name ?? 'Hackathon'
-              )}
-            </p>
-          </div>
+          <div className="truncate text-sm font-semibold text-text">{project.name}</div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-2 py-3 space-y-4">
-          {/* Main */}
-          <div>
-            <p className="text-[10px] font-700 uppercase tracking-widest text-muted-2 px-2.5 mb-1.5">
-              Workspace
-            </p>
-            <div className="space-y-0.5">
-              <Link
-                to={`/projects/${projectId}/dashboard`}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-[9px] text-xs transition border-l-[3px] ${
-                  isOverview
-                    ? 'bg-primary-soft border-primary text-primary-dark font-700 rounded-l-none'
-                    : 'border-transparent text-text hover:bg-bg font-500'
-                }`}
-              >
-                <div className="w-6 h-6 rounded-[7px] bg-navy-soft text-navy flex items-center justify-center flex-none">
-                  <LayoutDashboard size={12} />
-                </div>
-                Overview
-              </Link>
-              <Link
-                to={`/projects/${projectId}/dashboard/pitch`}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-[9px] text-xs transition border-l-[3px] ${
-                  isPitch
-                    ? 'bg-primary-soft border-primary text-primary-dark font-700 rounded-l-none'
-                    : 'border-transparent text-text hover:bg-bg font-500'
-                }`}
-              >
-                <div className="w-6 h-6 rounded-[7px] bg-success-soft text-success-dark flex items-center justify-center flex-none">
-                  <GitBranch size={12} />
-                </div>
-                Pitch
-              </Link>
-            </div>
-          </div>
-
-          {/* Agents */}
-          <div>
-            <p className="text-[10px] font-700 uppercase tracking-widest text-muted-2 px-2.5 mb-1.5">
-              Agents
-            </p>
-            <div className="space-y-0.5">
-              {AGENT_LIST.map((agent) => (
-                <AgentNavItem key={agent.key} agent={agent} projectId={projectId!} />
-              ))}
-            </div>
-          </div>
+        <nav className="flex-1 space-y-0.5 px-3">
+          {NAV_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to} label={item.label} Icon={item.icon} end={'end' in item ? item.end : false} />
+          ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-3 py-3 border-t border-border-soft">
-          {/* Hours remaining */}
-          {project && (
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[10px] text-muted-2 font-600">Time left</span>
-              <span className="text-xs font-800 text-navy font-mono">
-                {formatHours(project.hours_remaining)}
-              </span>
-            </div>
+        <div className="flex items-center gap-2 border-t border-border px-5 py-4 text-xs">
+          {wsConnected ? (
+            <>
+              <Wifi className="h-3.5 w-3.5 text-success" />
+              <span className="text-success">Live</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-3.5 w-3.5 text-danger" />
+              <span className="text-danger">Reconnecting…</span>
+            </>
           )}
-          {/* WS status */}
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`w-1.5 h-1.5 rounded-full flex-none ${wsConnected ? 'dot-live' : 'bg-danger'}`}
-            />
-            <span className="text-[10px] text-muted-2">
-              {wsConnected ? 'Live updates on' : 'Reconnecting…'}
-            </span>
-          </div>
         </div>
       </aside>
 
-      {/* ── Main area ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="h-13 bg-white border-b border-border flex items-center px-5 gap-3 flex-none">
-          <div className="flex-1 min-w-0">
-            {isLoading ? (
-              <SkeletonTile className="h-4 w-48" />
-            ) : (
-              <h1 className="text-sm font-700 text-navy truncate">{project?.name}</h1>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Notification bell (static for now) */}
-            <button className="w-8 h-8 rounded-[9px] border border-border bg-white hover:bg-bg flex items-center justify-center relative text-muted transition">
-              <Bell size={14} />
-            </button>
-
-            {/* Coach chat toggle */}
-            <button
-              onClick={toggleChatPanel}
-              className="flex items-center gap-1.5 h-8 px-3 rounded-[9px] bg-primary text-white text-xs font-600 hover:bg-primary-dark transition shadow-sm shadow-primary/25"
-            >
-              <MessageSquare size={13} />
-              Ask Coach
-            </button>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
-      </div>
-
-      {/* Coach Chat Panel */}
-      {projectId && <CoachChatPanel projectId={projectId} />}
+      <main className="flex-1 overflow-y-auto">
+        <Outlet />
+      </main>
     </div>
+  )
+}
+
+function NavLink({
+  to,
+  label,
+  Icon,
+  end,
+}: {
+  to: string
+  label: string
+  Icon: typeof LayoutDashboard
+  end?: boolean
+}) {
+  return (
+    <RouterNavLink
+      to={to || '.'}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+          isActive ? 'bg-primary-soft text-primary font-medium' : 'text-muted hover:bg-bg hover:text-text'
+        )
+      }
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </RouterNavLink>
   )
 }

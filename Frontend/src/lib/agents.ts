@@ -1,5 +1,9 @@
 import type { AgentMeta } from '@/types'
 
+// v2 roster: 'intake' → 'project_context_builder', 'reprioritizer' removed
+// (Reprioritizer node no longer exists — Risk Watcher now emits
+// planner_suggestion instead of auto-replanning). 'planner_suggestion',
+// 'file_intake', and 'team_assistant' are new.
 export const AGENT_LIST: AgentMeta[] = [
   {
     key: 'supervisor',
@@ -11,10 +15,10 @@ export const AGENT_LIST: AgentMeta[] = [
     bgColor: 'bg-navy-soft',
   },
   {
-    key: 'intake',
-    label: 'Intake / Clarifier',
-    shortLabel: 'INT',
-    desc: 'Gathers the problem statement and solution through conversation.',
+    key: 'project_context_builder',
+    label: 'Project Context Builder',
+    shortLabel: 'PCB',
+    desc: 'Gathers the problem statement and solution through conversation and uploaded files.',
     loop: 'Planning loop',
     iconColor: 'text-info',
     bgColor: 'bg-info-soft',
@@ -32,16 +36,25 @@ export const AGENT_LIST: AgentMeta[] = [
     key: 'planner',
     label: 'Planner',
     shortLabel: 'PLN',
-    desc: 'Builds and rebuilds the hour-by-hour roadmap from scope and time remaining.',
+    desc: 'Builds and revises the hour-by-hour roadmap from scope and time remaining, iterating on feedback.',
     loop: 'Planning loop',
     iconColor: 'text-primary',
     bgColor: 'bg-primary-soft',
   },
   {
+    key: 'planner_suggestion',
+    label: 'Planner Suggestion',
+    shortLabel: 'PSG',
+    desc: 'Proposes roadmap fixes for the user to accept or dismiss instead of auto-replanning.',
+    loop: 'Monitoring loop',
+    iconColor: 'text-gold',
+    bgColor: 'bg-gold-soft',
+  },
+  {
     key: 'github_watcher',
     label: 'GitHub Watcher',
     shortLabel: 'GHW',
-    desc: 'Polls the repo every 2 min. Maps commits and PRs to roadmap milestones.',
+    desc: 'Polls the repo every 2 min. Maps commits and PRs to roadmap milestones and surfaces insights.',
     loop: 'Monitoring loop',
     iconColor: 'text-teal',
     bgColor: 'bg-teal-soft',
@@ -56,13 +69,13 @@ export const AGENT_LIST: AgentMeta[] = [
     bgColor: 'bg-danger-soft',
   },
   {
-    key: 'reprioritizer',
-    label: 'Reprioritizer',
-    shortLabel: 'RPR',
-    desc: 'Decides how to fix each risk using Neo4j dependency traversal.',
-    loop: 'Monitoring loop',
-    iconColor: 'text-gold',
-    bgColor: 'bg-gold-soft',
+    key: 'file_intake',
+    label: 'File Intake',
+    shortLabel: 'FIL',
+    desc: 'Processes uploaded documents, slides, and images into usable project context.',
+    loop: 'Planning loop',
+    iconColor: 'text-info',
+    bgColor: 'bg-info-soft',
   },
   {
     key: 'pitch_agent',
@@ -72,6 +85,15 @@ export const AGENT_LIST: AgentMeta[] = [
     loop: 'Output',
     iconColor: 'text-success',
     bgColor: 'bg-success-soft',
+  },
+  {
+    key: 'team_assistant',
+    label: 'Team Assistant',
+    shortLabel: 'TMA',
+    desc: 'Handles team member management and group chat coordination.',
+    loop: 'Output',
+    iconColor: 'text-pink',
+    bgColor: 'bg-pink-soft',
   },
 ]
 

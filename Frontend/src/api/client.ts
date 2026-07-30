@@ -11,14 +11,22 @@ async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const { headers: optHeaders, ...restOptions } = options
-  const headers =
-    optHeaders === undefined
+  const { headers: optHeaders, body, ...restOptions } = options
+
+  // FormData bodies must NEVER get a Content-Type header — the browser needs
+  // to set `multipart/form-data; boundary=...` itself. Setting it to
+  // application/json (or anything else) here breaks every file upload.
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+
+  const headers = isFormData
+    ? optHeaders // may be undefined — that's correct, let fetch set it
+    : optHeaders === undefined
       ? { 'Content-Type': 'application/json' }
       : { 'Content-Type': 'application/json', ...optHeaders }
 
   const res = await fetch(`${BASE}${path}`, {
     headers,
+    body,
     ...restOptions,
   })
 

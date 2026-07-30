@@ -1,120 +1,169 @@
 import { create } from 'zustand'
 import type {
   Project,
-  AgentGraphState,
   AgentNodeKey,
   AgentRunEntry,
   Risk,
   RoadmapTask,
   ChatMessage,
+  TeamMember,
+  PlannerSuggestion,
+  GitHubInsight,
+  ProjectFile,
 } from '@/types'
 
-// ─── Project slice ────────────────────────────────────────────────────────────
-
-interface ProjectSlice {
+interface StoreState {
+  // ─── Project ────────────────────────────────────────────────────────────
   project: Project | null
-  setProject: (p: Project) => void
-  patchProject: (updates: Partial<Project>) => void
+  setProject: (project: Project) => void
+  patchProject: (patch: Partial<Project>) => void
   updateTask: (task: RoadmapTask) => void
   addRisk: (risk: Risk) => void
   resolveRisk: (riskId: string) => void
-}
 
-// ─── Agent graph live slice ───────────────────────────────────────────────────
+  // ─── WebSocket ──────────────────────────────────────────────────────────
+  wsConnected: boolean
+  setWsConnected: (connected: boolean) => void
 
-interface AgentGraphSlice {
-  agentGraph: AgentGraphState
+  // ─── Agent graph ────────────────────────────────────────────────────────
+  activeNode: AgentNodeKey | null
+  recentRuns: AgentRunEntry[]
   setActiveNode: (node: AgentNodeKey | null) => void
   addRun: (run: AgentRunEntry) => void
-  setAgentGraph: (state: AgentGraphState) => void
-}
 
-// ─── Connection / WS slice ────────────────────────────────────────────────────
-
-interface ConnectionSlice {
-  wsConnected: boolean
-  setWsConnected: (v: boolean) => void
-}
-
-// ─── UI slice ─────────────────────────────────────────────────────────────────
-
-interface UISlice {
-  chatPanelOpen: boolean
-  setChatPanelOpen: (v: boolean) => void
-  toggleChatPanel: () => void
-  selectedAgentKey: string | null
-  setSelectedAgentKey: (k: string | null) => void
+  // ─── Chat (legacy single coaching thread, kept for AgentPage) ──────────
   coachMessages: ChatMessage[]
-  appendCoachMessage: (m: ChatMessage) => void
-  setCoachMessages: (msgs: ChatMessage[]) => void
+  appendCoachMessage: (msg: ChatMessage) => void
+
+  // ─── v2: Personal / Group chat ──────────────────────────────────────────
+  personalMessages: ChatMessage[]
+  groupMessages: ChatMessage[]
+  appendPersonalMessage: (msg: ChatMessage) => void
+  appendGroupMessage: (msg: ChatMessage) => void
+
+  // ─── v2: Team members ─────────────────────────────────────────────────
+  teamMembers: TeamMember[]
+  setTeamMembers: (members: TeamMember[]) => void
+  upsertTeamMember: (member: TeamMember) => void
+  removeTeamMember: (memberId: string) => void
+
+  // ─── v2: Planner suggestions ─────────────────────────────────────────
+  plannerSuggestions: PlannerSuggestion[]
+  setPlannerSuggestions: (suggestions: PlannerSuggestion[]) => void
+  addPlannerSuggestion: (suggestion: PlannerSuggestion) => void
+  markPlannerSuggestionAccepted: (suggestionId: string) => void
+
+  // ─── v2: GitHub insights ─────────────────────────────────────────────
+  githubInsights: GitHubInsight[]
+  setGithubInsights: (insights: GitHubInsight[]) => void
+  addGithubInsight: (insight: GitHubInsight) => void
+
+  // ─── v2: Files ───────────────────────────────────────────────────────
+  files: ProjectFile[]
+  setFiles: (files: ProjectFile[]) => void
+  upsertFile: (file: ProjectFile) => void
 }
 
-// ─── Root store ───────────────────────────────────────────────────────────────
-
-type Store = ProjectSlice & AgentGraphSlice & ConnectionSlice & UISlice
-
-export const useStore = create<Store>((set) => ({
-  // Project
+export const useStore = create<StoreState>((set) => ({
+  // ─── Project ────────────────────────────────────────────────────────────
   project: null,
-  setProject: (p) => set({ project: p }),
-  patchProject: (updates) =>
-    set((s) => ({ project: s.project ? { ...s.project, ...updates } : s.project })),
+  setProject: (project) => set({ project }),
+  patchProject: (patch) =>
+    set((state) => ({ project: state.project ? { ...state.project, ...patch } : state.project })),
   updateTask: (task) =>
-    set((s) => ({
-      project: s.project
-        ? {
-            ...s.project,
-            roadmap: s.project.roadmap?.map((t) =>
-              t.id === task.id ? task : t
-            ),
-          }
-        : s.project,
-    })),
+    set((state) => {
+      if (!state.project?.roadmap) return state
+      return {
+        project: {
+          ...state.project,
+          roadmap: state.project.roadmap.map((t) => (t.id === task.id ? task : t)),
+        },
+      }
+    }),
   addRisk: (risk) =>
-    set((s) => ({
-      project: s.project
-        ? { ...s.project, risks: [risk, ...(s.project.risks ?? [])] }
-        : s.project,
-    })),
+    set((state) => {
+      if (!state.project) return state
+      const risks = state.project.risks ? [...state.project.risks, risk] : [risk]
+      return { project: { ...state.project, risks } }
+    }),
   resolveRisk: (riskId) =>
-    set((s) => ({
-      project: s.project
-        ? {
-            ...s.project,
-            risks: s.project.risks?.map((r) =>
-              r.id === riskId ? { ...r, resolved: true } : r
-            ),
-          }
-        : s.project,
-    })),
+    set((state) => {
+      if (!state.project?.risks) return state
+      return {
+        project: {
+          ...state.project,
+          risks: state.project.risks.map((r) => (r.id === riskId ? { ...r, resolved: true } : r)),
+        },
+      }
+    }),
 
-  // Agent Graph
-  agentGraph: { active_node: null, recent_runs: [] },
-  setActiveNode: (node) =>
-    set((s) => ({ agentGraph: { ...s.agentGraph, active_node: node } })),
-  addRun: (run) =>
-    set((s) => ({
-      agentGraph: {
-        ...s.agentGraph,
-        recent_runs: [run, ...s.agentGraph.recent_runs].slice(0, 20),
-      },
-    })),
-  setAgentGraph: (state) => set({ agentGraph: state }),
-
-  // Connection
+  // ─── WebSocket ──────────────────────────────────────────────────────────
   wsConnected: false,
-  setWsConnected: (v) => set({ wsConnected: v }),
+  setWsConnected: (wsConnected) => set({ wsConnected }),
 
-  // UI
-  chatPanelOpen: false,
-  setChatPanelOpen: (v) => set({ chatPanelOpen: v }),
-  toggleChatPanel: () => set((s) => ({ chatPanelOpen: !s.chatPanelOpen })),
-  selectedAgentKey: null,
-  setSelectedAgentKey: (k) => set({ selectedAgentKey: k }),
+  // ─── Agent graph ────────────────────────────────────────────────────────
+  activeNode: null,
+  recentRuns: [],
+  setActiveNode: (activeNode) => set({ activeNode }),
+  addRun: (run) => set((state) => ({ recentRuns: [run, ...state.recentRuns].slice(0, 50) })),
+
+  // ─── Chat (legacy single coaching thread, kept for AgentPage) ──────────
   coachMessages: [],
-  appendCoachMessage: (m) =>
-    set((s) => ({
-      coachMessages: [...s.coachMessages.filter((x) => x.id !== m.id), m],
+  appendCoachMessage: (msg) => set((state) => ({ coachMessages: [...state.coachMessages, msg] })),
+
+  // ─── v2: Personal / Group chat ──────────────────────────────────────────
+  personalMessages: [],
+  groupMessages: [],
+  appendPersonalMessage: (msg) =>
+    set((state) => ({ personalMessages: [...state.personalMessages, msg] })),
+  appendGroupMessage: (msg) =>
+    set((state) => ({ groupMessages: [...state.groupMessages, msg] })),
+
+  // ─── v2: Team members ─────────────────────────────────────────────────
+  teamMembers: [],
+  setTeamMembers: (teamMembers) => set({ teamMembers }),
+  upsertTeamMember: (member) =>
+    set((state) => {
+      const exists = state.teamMembers.some((m) => m.id === member.id)
+      return {
+        teamMembers: exists
+          ? state.teamMembers.map((m) => (m.id === member.id ? member : m))
+          : [...state.teamMembers, member],
+      }
+    }),
+  removeTeamMember: (memberId) =>
+    set((state) => ({ teamMembers: state.teamMembers.filter((m) => m.id !== memberId) })),
+
+  // ─── v2: Planner suggestions ─────────────────────────────────────────
+  plannerSuggestions: [],
+  setPlannerSuggestions: (plannerSuggestions) => set({ plannerSuggestions }),
+  addPlannerSuggestion: (suggestion) =>
+    set((state) => ({ plannerSuggestions: [suggestion, ...state.plannerSuggestions] })),
+  markPlannerSuggestionAccepted: (suggestionId) =>
+    set((state) => ({
+      plannerSuggestions: state.plannerSuggestions.map((s) =>
+        s.id === suggestionId ? { ...s, status: 'accepted' } : s
+      ),
     })),
-  setCoachMessages: (msgs) => set({ coachMessages: msgs }),
+
+  // ─── v2: GitHub insights ─────────────────────────────────────────────
+  githubInsights: [],
+  setGithubInsights: (githubInsights) => set({ githubInsights }),
+  addGithubInsight: (insight) =>
+    set((state) => ({ githubInsights: [insight, ...state.githubInsights] })),
+
+  // ─── v2: Files ───────────────────────────────────────────────────────
+  files: [],
+  setFiles: (files) => set({ files }),
+  upsertFile: (file) =>
+    set((state) => {
+      const exists = state.files.some((f) => f.id === file.id)
+      return {
+        files: exists ? state.files.map((f) => (f.id === file.id ? file : f)) : [...state.files, file],
+      }
+    }),
 }))
+
+// Non-hook accessor used inside the WS handler (matches existing usage of
+// useStore.getState() in useProjectSocket.ts)
+export const getStoreState = () => useStore.getState()

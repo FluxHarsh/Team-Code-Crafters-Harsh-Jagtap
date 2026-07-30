@@ -1,7 +1,8 @@
 // ─── Project ────────────────────────────────────────────────────────────────
 
+// v2: 'intake' renamed to 'project_context'
 export type ProjectStatus =
-  | 'intake'
+  | 'project_context'
   | 'planning'
   | 'active'
   | 'at_risk'
@@ -25,6 +26,9 @@ export interface RoadmapTask {
   owner: string
   eta: string
   status: 'todo' | 'in_progress' | 'blocked' | 'done'
+  // v2: dependency edges (Neo4j BLOCKED_BY), optional since not all
+  // endpoints return them yet — see Build Deck connector-line plan
+  depends_on?: string[]
 }
 
 export interface Risk {
@@ -79,6 +83,63 @@ export interface PitchOutline {
   ask?: string
 }
 
+// ─── v2 additions: Team, Files, GitHub Insights, Planner Suggestions ────────
+
+export interface TeamMember {
+  id: string
+  name: string
+  email?: string
+  role?: string
+  avatar_initials: string
+  joined_at?: string
+}
+
+export type FileStatus = 'uploading' | 'processing' | 'processed' | 'failed'
+
+export interface ProjectFile {
+  id: string
+  filename: string
+  content_type: string
+  status: FileStatus
+  extracted_chars?: number
+  uploaded_by?: string
+  created_at?: string
+}
+
+export interface GitHubInsight {
+  id: string
+  summary: string
+  related_task?: string
+  severity?: 'info' | 'warn' | 'critical'
+  created_at: string
+}
+
+export interface PlannerSuggestion {
+  id: string
+  title: string
+  rationale: string
+  diff_summary?: string
+  status: 'pending' | 'accepted' | 'dismissed'
+  created_at: string
+}
+
+export interface ScopeCriticFinding {
+  id: string
+  concern: string
+  related_feature?: string
+  severity: 'high' | 'med' | 'low'
+}
+
+export interface DashboardSummary {
+  percent_complete: number
+  building_count: number
+  blocked_count: number
+  shipped_count: number
+  total_count: number
+  commit_count: number
+  hours_remaining: number
+}
+
 export interface Project {
   id: string
   name: string
@@ -98,37 +159,47 @@ export interface Project {
   plan_approved_at?: string | null
   created_at?: string
   updated_at?: string
+  // v2
+  team_members?: TeamMember[]
+  files?: ProjectFile[]
 }
 
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
-export type ChatPhase = 'intake' | 'planning' | 'coaching'
+// v2: 'intake' phase renamed to 'project_context'; single coaching chat
+// split into personal/group
+export type ChatPhase = 'project_context' | 'planning' | 'personal' | 'group'
 export type ChatRole = 'user' | 'agent'
 
 export interface ChatMessage {
   id: string
   project_id?: string
-  // phase is not returned by GET /ingest/history or GET /chat/history
+  // phase is not returned by GET /context/history or GET /chat/*/history
   phase?: ChatPhase
   role: ChatRole
   agent_node?: string
   speaker_name?: string
   content: string
-  // created_at is not returned by GET /ingest/history
+  // created_at is not returned by GET /context/history
   created_at?: string
 }
 
 // ─── Agent Graph ─────────────────────────────────────────────────────────────
 
+// v2 node roster — 'intake' → 'project_context_builder',
+// 'reprioritizer' removed, 'planner_suggestion' + 'file_intake' +
+// 'team_assistant' added
 export type AgentNodeKey =
   | 'supervisor'
-  | 'intake'
+  | 'project_context_builder'
   | 'scope_critic'
   | 'planner'
+  | 'planner_suggestion'
   | 'github_watcher'
   | 'risk_watcher'
-  | 'reprioritizer'
+  | 'file_intake'
   | 'pitch_agent'
+  | 'team_assistant'
 
 export interface AgentRunEntry {
   node: AgentNodeKey
@@ -145,6 +216,7 @@ export interface AgentGraphState {
 
 // ─── WebSocket Events ────────────────────────────────────────────────────────
 
+// v2: 9 new event types added alongside the original 10
 export type WSEventType =
   | 'plan_draft_updated'
   | 'plan_approved'
@@ -156,6 +228,16 @@ export type WSEventType =
   | 'pitch_ready'
   | 'chat_message'
   | 'connected'
+  // v2 additions
+  | 'planner_revision_created'
+  | 'planner_suggestion_created'
+  | 'planner_suggestion_accepted'
+  | 'github_insight_created'
+  | 'project_context_updated'
+  | 'file_processed'
+  | 'team_updated'
+  | 'group_chat_message'
+  | 'personal_chat_message'
 
 // Backend sends {"event": "...", "payload": {...}}
 export interface WSEvent {
@@ -163,7 +245,7 @@ export interface WSEvent {
   payload: Record<string, unknown>
 }
 
-// ─── API Responses ───────────────────────────────────────────────────────────
+// ─── API Request/Response types ─────────────────────────────────────────────
 
 export interface CreateProjectResponse {
   project_id: string
@@ -171,53 +253,144 @@ export interface CreateProjectResponse {
   greeting: string
 }
 
-export interface IngestMessageResponse {
+// projectContextApi (was ingestApi)
+export interface ContextMessageResponse {
   reply: string
   ready_for_planning: boolean
 }
 
-export interface IngestDocumentResponse {
+export interface ContextFileUploadResponse {
   document_id: string
   filename: string
   extracted_chars: number
 }
 
-export interface PlanChatResponse {
+// plannerApi (was planApi) — iterative, versioned; no single "chat" endpoint
+export interface PlannerDraftRequest {
+  notes?: string
+}
+
+export interface PlannerDraftResponse {
+  version: number
+  draft_scope: ScopeData
+  draft_roadmap: RoadmapTask[]
+}
+
+export interface PlannerFeedbackRequest {
+  feedback: string
+}
+
+export interface PlannerFeedbackResponse {
+  version: number
   reply: string
   draft_scope: ScopeData
   draft_roadmap: RoadmapTask[]
 }
 
-export interface PlanDraftResponse {
-  draft_scope: ScopeData
-  draft_roadmap: RoadmapTask[]
-}
-
-export interface PlanApproveResponse {
+export interface PlannerApproveResponse {
   status: ProjectStatus
   plan_approved_at: string
   dashboard_ready: boolean
 }
 
+export interface PlannerHistoryEntry {
+  version: number
+  draft_scope: ScopeData
+  draft_roadmap: RoadmapTask[]
+  created_at: string
+}
+
+export interface PlannerHistoryResponse {
+  versions: PlannerHistoryEntry[]
+}
+
+// planner suggestions (replaces roadmapApi.replan / risksApi.reprioritize)
+export interface PlannerSuggestionsResponse {
+  suggestions: PlannerSuggestion[]
+}
+
+export interface AcceptPlannerSuggestionResponse {
+  accepted: boolean
+  updated_roadmap: RoadmapTask[]
+}
+
+// scope critic
+export interface ScopeCriticRunResponse {
+  findings: ScopeCriticFinding[]
+}
+
+// github
 export interface GitHubConnectResponse {
   connected: boolean
   poll_interval_seconds: number
 }
 
-export interface ReprioritizeResponse {
-  decision: string
-  rationale: string
-  roadmap_replanned: boolean
+export interface GitHubInsightsResponse {
+  insights: GitHubInsight[]
 }
 
-export interface ChatResponse {
+// chat — split into personal / group
+export interface PersonalChatRequest {
+  content: string
+}
+
+export interface PersonalChatResponse {
   reply: string
   answered_by: string
 }
 
+export interface GroupChatRequest {
+  content: string
+  speaker_name: string
+}
+
+export interface GroupChatResponse {
+  message: ChatMessage
+}
+
+export interface ChatHistoryResponse {
+  messages: ChatMessage[]
+}
+
+// pitch
 export interface PitchResponse {
   pitch_outline: PitchOutline
   generated_at?: string
+}
+
+export interface PitchHistoryEntry {
+  pitch_outline: PitchOutline
+  generated_at: string
+}
+
+export interface PitchHistoryResponse {
+  versions: PitchHistoryEntry[]
+}
+
+// team members
+export interface AddTeamMemberRequest {
+  name: string
+  email?: string
+  role?: string
+}
+
+export interface TeamMembersResponse {
+  members: TeamMember[]
+}
+
+// files (generic upload surface, not just project-context intake)
+export interface FileUploadResponse {
+  file: ProjectFile
+}
+
+export interface FilesResponse {
+  files: ProjectFile[]
+}
+
+// dashboard aggregation
+export interface DashboardSummaryResponse {
+  summary: DashboardSummary
+  roadmap: RoadmapTask[]
 }
 
 // ─── UI State ────────────────────────────────────────────────────────────────

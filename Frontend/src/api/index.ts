@@ -2,136 +2,182 @@ import { api } from './client'
 import type {
   Project,
   CreateProjectResponse,
-  IngestMessageResponse,
-  IngestDocumentResponse,
-  PlanChatResponse,
-  PlanDraftResponse,
-  PlanApproveResponse,
+  ContextMessageResponse,
+  ContextFileUploadResponse,
   ChatMessage,
-  ChatResponse,
-  AgentGraphState,
+  ChatHistoryResponse,
+  PlannerDraftRequest,
+  PlannerDraftResponse,
+  PlannerFeedbackRequest,
+  PlannerFeedbackResponse,
+  PlannerApproveResponse,
+  PlannerHistoryResponse,
+  PlannerSuggestionsResponse,
+  AcceptPlannerSuggestionResponse,
+  ScopeCriticRunResponse,
   GitHubConnectResponse,
-  GitHubState,
-  Risk,
-  RoadmapTask,
-  ReprioritizeResponse,
+  GitHubInsightsResponse,
+  PersonalChatRequest,
+  PersonalChatResponse,
+  GroupChatRequest,
+  GroupChatResponse,
+  AddTeamMemberRequest,
+  TeamMembersResponse,
+  FileUploadResponse,
+  FilesResponse,
+  DashboardSummaryResponse,
   PitchResponse,
+  PitchHistoryResponse,
 } from '@/types'
 
-// ─── Projects ────────────────────────────────────────────────────────────────
+// ─── Projects ─────────────────────────────────────────────────────────────
 
 export const projectsApi = {
-  create: (name: string) =>
-    api.post<CreateProjectResponse>('/projects', { name }),
-  get: (id: string) => api.get<Project>(`/projects/${id}`),
+  create: (idea: string) => api.post<CreateProjectResponse>('/projects', { idea }),
+  get: (projectId: string) => api.get<Project>(`/projects/${projectId}`),
 }
 
-// ─── Ingest ──────────────────────────────────────────────────────────────────
+// ─── Project Context (was ingestApi) ───────────────────────────────────────
+// /ingest/* is deprecated in v2, kept temporarily but marked for removal.
+// Frontend now calls the v2 /context/* endpoints exclusively.
 
-export const ingestApi = {
-  sendMessage: (projectId: string, message: string) =>
-    api.post<IngestMessageResponse>(`/projects/${projectId}/ingest/message`, { message }),
-  uploadDocument: (projectId: string, file: File) => {
+export const projectContextApi = {
+  sendMessage: (projectId: string, content: string) =>
+    api.post<ContextMessageResponse>(`/projects/${projectId}/context/message`, { content }),
+
+  uploadFile: (projectId: string, file: File) => {
     const form = new FormData()
     form.append('file', file)
-    return api.postForm<IngestDocumentResponse>(
-      `/projects/${projectId}/ingest/document`,
-      form
-    )
+    return api.postForm<ContextFileUploadResponse>(`/projects/${projectId}/context/files`, form)
   },
+
   getHistory: (projectId: string) =>
-    api.get<{ messages: ChatMessage[] }>(`/projects/${projectId}/ingest/history`),
+    api.get<ChatHistoryResponse>(`/projects/${projectId}/context/history`),
 }
 
-// ─── Plan ────────────────────────────────────────────────────────────────────
+// ─── Planner (was planApi) ──────────────────────────────────────────────────
+// v2 is iterative and versioned — draft → feedback → approve — there is no
+// single "chat" endpoint anymore. roadmapApi.replan is gone; suggestions
+// are accepted through plannerSuggestionsApi instead.
 
-export const planApi = {
-  chat: (projectId: string, message: string) =>
-    api.post<PlanChatResponse>(`/projects/${projectId}/plan/chat`, { message }),
-  getDraft: (projectId: string) =>
-    api.get<PlanDraftResponse>(`/projects/${projectId}/plan/draft`),
+export const plannerApi = {
+  draft: (projectId: string, body?: PlannerDraftRequest) =>
+    api.post<PlannerDraftResponse>(`/projects/${projectId}/planner/draft`, body),
+
+  feedback: (projectId: string, body: PlannerFeedbackRequest) =>
+    api.post<PlannerFeedbackResponse>(`/projects/${projectId}/planner/feedback`, body),
+
   approve: (projectId: string) =>
-    api.post<PlanApproveResponse>(`/projects/${projectId}/plan/approve`),
+    api.post<PlannerApproveResponse>(`/projects/${projectId}/planner/approve`),
+
+  history: (projectId: string) =>
+    api.get<PlannerHistoryResponse>(`/projects/${projectId}/planner/history`),
 }
 
-// ─── Roadmap ─────────────────────────────────────────────────────────────────
+// ─── Planner Suggestions (replaces roadmapApi.replan / risksApi.reprioritize) ─
+// The old /roadmap/replan and /reprioritize endpoints, and the Reprioritizer
+// agent node, no longer exist. The Risk Watcher now produces suggestions
+// that the user explicitly accepts or dismisses.
 
-export const roadmapApi = {
-  get: (projectId: string) =>
-    api.get<{ tasks: RoadmapTask[] }>(`/projects/${projectId}/roadmap`),
-  replan: (projectId: string, reason = 'manual_request') =>
-    api.post<{ status: string; roadmap: RoadmapTask[] }>(
-      `/projects/${projectId}/roadmap/replan`,
-      { reason }
+export const plannerSuggestionsApi = {
+  list: (projectId: string) =>
+    api.get<PlannerSuggestionsResponse>(`/projects/${projectId}/planner-suggestions`),
+
+  accept: (projectId: string, suggestionId: string) =>
+    api.post<AcceptPlannerSuggestionResponse>(
+      `/projects/${projectId}/planner-suggestions/${suggestionId}/accept`
     ),
-  updateTask: (
-    projectId: string,
-    taskId: string,
-    updates: Partial<Pick<RoadmapTask, 'status'> & { note: string }>
-  ) => api.patch<{ task: RoadmapTask; risk_flagged: boolean }>(
-    `/projects/${projectId}/roadmap/tasks/${taskId}`,
-    updates
-  ),
+
+  dismiss: (projectId: string, suggestionId: string) =>
+    api.post<{ dismissed: boolean }>(
+      `/projects/${projectId}/planner-suggestions/${suggestionId}/dismiss`
+    ),
+}
+
+// ─── Scope Critic ────────────────────────────────────────────────────────────
+
+export const scopeCriticApi = {
+  run: (projectId: string) =>
+    api.post<ScopeCriticRunResponse>(`/projects/${projectId}/scope-critic/run`),
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
 export const githubApi = {
-  connect: (
-    projectId: string,
-    data: { repo_full_name: string; access_token: string; poll_interval_seconds: number }
-  ) => api.post<GitHubConnectResponse>(`/projects/${projectId}/github/connect`, data),
-  getState: (projectId: string) =>
-    api.get<GitHubState>(`/projects/${projectId}/github/state`),
+  connect: (projectId: string, repoUrl: string) =>
+    api.post<GitHubConnectResponse>(`/projects/${projectId}/github/connect`, { repo_url: repoUrl }),
 }
 
-// ─── Risks ───────────────────────────────────────────────────────────────────
-
-export const risksApi = {
-  get: (projectId: string) =>
-    api.get<{ risks: Risk[] }>(`/projects/${projectId}/risks`),
-  resolve: (projectId: string, riskId: string, resolution_note: string) =>
-    api.post<{ id: string; resolved: boolean }>(
-      `/projects/${projectId}/risks/${riskId}/resolve`,
-      { resolution_note }
-    ),
-  reprioritize: (projectId: string, risk_id: string) =>
-    api.post<ReprioritizeResponse>(`/projects/${projectId}/reprioritize`, { risk_id }),
+export const githubInsightsApi = {
+  list: (projectId: string) =>
+    api.get<GitHubInsightsResponse>(`/projects/${projectId}/github/insights`),
 }
 
-// ─── Progress ────────────────────────────────────────────────────────────────
+// ─── Chat — split into personal / group (was a single chatApi) ─────────────
 
-export const progressApi = {
-  log: (projectId: string, text: string) =>
-    api.post<{ logged: boolean; risk_watcher_triggered: boolean }>(
-      `/projects/${projectId}/progress`,
-      { text }
-    ),
+export const personalChatApi = {
+  send: (projectId: string, body: PersonalChatRequest) =>
+    api.post<PersonalChatResponse>(`/projects/${projectId}/chat/personal`, body),
+
+  history: (projectId: string) =>
+    api.get<ChatHistoryResponse>(`/projects/${projectId}/chat/personal/history`),
 }
 
-// ─── Chat ────────────────────────────────────────────────────────────────────
+export const groupChatApi = {
+  send: (projectId: string, body: GroupChatRequest) =>
+    api.post<GroupChatResponse>(`/projects/${projectId}/chat/group`, body),
 
-export const chatApi = {
-  send: (projectId: string, message: string) =>
-    api.post<ChatResponse>(`/projects/${projectId}/chat`, { message }),
-  getHistory: (projectId: string, cursor?: string) =>
-    api.get<{ messages: ChatMessage[]; next_cursor?: string }>(
-      `/projects/${projectId}/chat/history${cursor ? `?cursor=${cursor}` : ''}`
-    ),
+  history: (projectId: string) =>
+    api.get<ChatHistoryResponse>(`/projects/${projectId}/chat/group/history`),
+}
+
+// ─── Team Members ────────────────────────────────────────────────────────────
+
+export const teamMembersApi = {
+  list: (projectId: string) =>
+    api.get<TeamMembersResponse>(`/projects/${projectId}/team-members`),
+
+  add: (projectId: string, body: AddTeamMemberRequest) =>
+    api.post<TeamMembersResponse>(`/projects/${projectId}/team-members`, body),
+
+  remove: (projectId: string, memberId: string) =>
+    api.post<{ removed: boolean }>(`/projects/${projectId}/team-members/${memberId}/remove`),
+}
+
+// ─── Files (general upload surface — not just project-context intake) ──────
+
+export const fileUploadApi = {
+  upload: (projectId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.postForm<FileUploadResponse>(`/projects/${projectId}/files`, form)
+  },
+
+  list: (projectId: string) => api.get<FilesResponse>(`/projects/${projectId}/files`),
+}
+
+// ─── Dashboard aggregation ───────────────────────────────────────────────────
+
+export const dashboardApi = {
+  summary: (projectId: string) =>
+    api.get<DashboardSummaryResponse>(`/projects/${projectId}/dashboard`),
+
+  kanban: (projectId: string) =>
+    api.get<DashboardSummaryResponse>(`/projects/${projectId}/dashboard/kanban`),
 }
 
 // ─── Pitch ───────────────────────────────────────────────────────────────────
 
 export const pitchApi = {
-  generate: (projectId: string) =>
-    api.post<PitchResponse>(`/projects/${projectId}/pitch/generate`),
-  get: (projectId: string) =>
-    api.get<PitchResponse>(`/projects/${projectId}/pitch`),
+  get: (projectId: string) => api.get<PitchResponse>(`/projects/${projectId}/pitch`),
+
+  regenerate: (projectId: string) =>
+    api.post<PitchResponse>(`/projects/${projectId}/pitch/regenerate`),
+
+  getHistory: (projectId: string) =>
+    api.get<PitchHistoryResponse>(`/projects/${projectId}/pitch/history`),
 }
 
-// ─── Agent Graph ─────────────────────────────────────────────────────────────
+// ─── Chat message helper type re-export (used by some hooks) ───────────────
 
-export const agentGraphApi = {
-  getState: (projectId: string) =>
-    api.get<AgentGraphState>(`/projects/${projectId}/agent-graph/state`),
-}
+export type { ChatMessage }
