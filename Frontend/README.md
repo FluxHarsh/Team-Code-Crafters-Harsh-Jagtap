@@ -1,75 +1,86 @@
-# React + TypeScript + Vite
+# Hackathon Coach — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript frontend for the Hackathon Coach AI agent system.
 
-Currently, two official plugins are available:
+## Quick start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Runs on `http://localhost:5173`. The Vite dev server proxies `/api` and WebSocket `/ws` to `http://localhost:8000` (your FastAPI backend).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Stack
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Layer | Library |
+|---|---|
+| Framework | React 18 + TypeScript |
+| Routing | React Router v6 |
+| Server state | TanStack Query v5 |
+| Client state | Zustand v4 |
+| Drag-and-drop | dnd-kit |
+| Styling | Tailwind CSS v3 |
+| Icons | Lucide React |
+| Build | Vite 5 |
 
+## Project structure
+
+```
+src/
+  pages/
+    LandingPage/        # / — create project
+    IngestPage/         # /projects/:id/ingest — intake chat
+    PlanPage/           # /projects/:id/plan — planner chat + draft plan
+    dashboard/
+      OverviewPage/     # /dashboard — stats, Kanban, risks, agent graph
+      AgentPage/        # /dashboard/agents/:agentKey — per-agent detail
+      PitchPage/        # /dashboard/pitch — pitch outline + export
+  components/
+    chat/               # ChatThread, ChatComposer, CoachChatPanel, DocumentDropzone
+    dashboard/          # DashboardShell, AgentNavItem, AgentGraphView, StatTile, etc.
+    kanban/             # KanbanBoard (dnd-kit drag-and-drop)
+    risks/              # RiskFeedItem
+    plan/               # DraftPlanPanel, ApprovalBar
+    ui/                 # Button, Input, Card, EmptyState, SkeletonTile, etc.
+  hooks/
+    useProject.ts       # TanStack Query wrapper for GET /projects/:id
+    useProjectSocket.ts # Single WebSocket connection per project
+  store/
+    index.ts            # Zustand store — project, agentGraph, connection, ui slices
+  api/
+    client.ts           # Base fetch wrapper with error handling
+    index.ts            # All API domain functions
+  lib/
+    agents.ts           # Agent metadata (labels, colors, descriptions)
+    utils.ts            # cn(), formatTime(), KANBAN_COLUMNS, etc.
+  types/
+    index.ts            # All shared TypeScript types
+```
+
+## Key design decisions
+
+**Phase routing** — `project.status` from the backend is always the source of truth. Route guards in `DashboardShell` redirect to `/ingest` or `/plan` if status doesn't match. The dashboard is only reachable when `status === 'active'`.
+
+**Single WebSocket** — `useProjectSocket` opens one connection per project in the `DashboardShell`. Events are dispatched to the Zustand store; components subscribe to the store, not the socket. On reconnect, `GET /projects/:id` is re-fetched to patch any missed events.
+
+**Optimistic Kanban** — drag-and-drop updates the local task status immediately, calls `PATCH /roadmap/tasks/:id`, and reverts with an inline card error on failure.
+
+**`@AI` mentions** — the `ChatComposer` detects `@AI` in the text and routes the message to the coach API. Plain text (no `@AI`) is treated as a team note stored locally with the `speaker_name` field.
+
+**Coach Chat Panel** — a slide-in drawer toggled from the top bar, persistent across all dashboard routes. Fetches `chat/history` on first open, then appends to local state from direct API responses + WebSocket `chat_message` events (de-duplicated by `id`).
+
+## Backend proxy
+
+`vite.config.ts` proxies:
+- `/api` → `http://localhost:8000`  
+- WebSocket `/api/v1/projects/:id/updates` → `ws://localhost:8000`
+
+Change the target in `vite.config.ts` if your backend runs on a different port.
+
+## Build for production
+
+```bash
+npm run build
+# Output: dist/
 ```
