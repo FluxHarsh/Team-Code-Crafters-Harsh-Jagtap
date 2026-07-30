@@ -1,0 +1,58 @@
+[
+  {
+    "source_text": "Team built a real-time collaborative whiteboard but spent the first 10 hours on a custom WebRTC signaling layer instead of using an existing library. By hour 30 they had no time left for the AI-summarization feature that was supposed to be the differentiator, and the demo showed only basic drawing.",
+    "metadata": {
+      "tags": ["scope_creep", "infra_over_investment", "realtime_collab"],
+      "hackathon_theme": "productivity",
+      "outcome": "did_not_finish_core_feature"
+    }
+  },
+  {
+    "source_text": "A team pitching an AI resume screener assumed recruiters would trust a black-box score. Judges immediately asked for explainability, and the team had no answer because they'd never scoped an explanation UI. Adding basic 'why this score' bullet points the morning of the demo would have addressed most of the pushback.",
+    "metadata": {
+      "tags": ["assumption_risk", "explainability", "judge_qa"],
+      "hackathon_theme": "hr_tech",
+      "outcome": "weak_qa_performance"
+    }
+  },
+  {
+    "source_text": "Project depended on a third-party API for core functionality; the API's free tier rate-limited them mid-event and they had no fallback or mock mode, so the live demo failed. A cached/mocked response path for demo day would have prevented this entirely.",
+    "metadata": {
+      "tags": ["external_dependency", "no_fallback", "demo_failure"],
+      "hackathon_theme": "general",
+      "outcome": "demo_failure"
+    }
+  },
+  {
+    "source_text": "Team of four split into two pairs working on frontend and backend with no agreed API contract. Integration didn't happen until the final four hours, revealing mismatched data shapes that took most of the remaining time to reconcile, leaving no time for polish or the pitch deck.",
+    "metadata": {
+      "tags": ["late_integration", "no_contract", "team_coordination"],
+      "hackathon_theme": "general",
+      "outcome": "rushed_integration"
+    }
+  },
+  {
+    "source_text": "A sustainability-tracking app kept adding 'just one more' data source (utility bills, then transit, then diet) throughout the event without ever cutting anything, ending with five shallow half-features instead of one polished one. The team never revisited their MVP scope after the initial planning session.",
+    "metadata": {
+      "tags": ["scope_creep", "no_replanning", "feature_sprawl"],
+      "hackathon_theme": "sustainability",
+      "outcome": "shallow_mvp"
+    }
+  },
+  {
+    "source_text": "Team hit a blocking bug in their auth flow around hour 20 and spent six hours debugging it alone rather than asking for help or descoping login entirely for the demo. A team that had used a magic-link or no-auth demo mode recovered from a similar blocker in under an hour.",
+    "metadata": {
+      "tags": ["blocker_recovery", "auth", "descope_option"],
+      "hackathon_theme": "general",
+      "outcome": "recovered_late"
+    }
+  },
+  {
+    "source_text": "Pitch deck was assembled in the last 15 minutes with no rehearsal, and the team ran over time trying to explain technical architecture judges didn't ask about, instead of leading with the problem and the demo. Teams that rehearsed a 90-second version of their pitch consistently scored higher on clarity.",
+    "metadata": {
+      "tags": ["pitch_prep", "time_management", "no_rehearsal"],
+      "hackathon_theme": "general",
+      "outcome": "weak_pitch_delivery"
+    }
+  }
+]
