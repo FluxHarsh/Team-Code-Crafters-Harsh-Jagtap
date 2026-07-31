@@ -8,7 +8,6 @@ import type {
   ChatMessage,
   TeamMember,
   PlannerSuggestion,
-  GitHubInsight,
   ProjectFile,
 } from '@/types'
 
@@ -54,10 +53,10 @@ interface StoreState {
   markPlannerSuggestionAccepted: (suggestionId: string) => void
   markPlannerSuggestionDismissed: (suggestionId: string) => void
 
-  // ─── v2: GitHub insights ─────────────────────────────────────────────
-  githubInsights: GitHubInsight[]
-  setGithubInsights: (insights: GitHubInsight[]) => void
-  addGithubInsight: (insight: GitHubInsight) => void
+  // ─── GitHub insights (backend returns plain strings) ─────────────────
+  githubInsights: string[]
+  setGithubInsights: (insights: string[]) => void
+  addGithubInsight: (insight: string) => void
 
   // ─── v2: Files ───────────────────────────────────────────────────────
   files: ProjectFile[]

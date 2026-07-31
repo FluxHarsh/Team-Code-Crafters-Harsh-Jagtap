@@ -9,6 +9,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import { useQueryClient } from '@tanstack/react-query'
+import { roadmapTasksApi } from '@/api'
 import { useStore } from '@/store'
 import { KANBAN_COLUMNS } from '@/lib/utils'
 import { KanbanColumn } from './KanbanColumn'
@@ -18,10 +20,12 @@ import type { RoadmapTask } from '@/types'
 export function KanbanBoard() {
   const project = useStore((s) => s.project)
   const updateTask = useStore((s) => s.updateTask)
+  const queryClient = useQueryClient()
   const [activeTask, setActiveTask] = useState<RoadmapTask | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const roadmap = project?.roadmap ?? []
+  const projectId = project?.id
 
   function handleDragStart(event: DragStartEvent) {
     const task = roadmap.find((t) => t.id === event.active.id)
@@ -48,12 +52,18 @@ export function KanbanBoard() {
           ? overData.task?.status
           : (over.id as string)
 
-    if (targetColumnId && targetColumnId !== task.status) {
-      updateTask({ ...task, status: targetColumnId as RoadmapTask['status'] })
-      // TODO(phase 3.5 / backend integration): fire the PATCH to persist
-      // the move once a tasksApi.move endpoint exists — optimistic local
-      // update above keeps the board responsive in the meantime.
-    }
+    if (!targetColumnId || targetColumnId === task.status || !projectId) return
+
+    // Optimistic local update, then persist via PATCH /roadmap/tasks/{id}.
+    const next: RoadmapTask = { ...task, status: targetColumnId as RoadmapTask['status'] }
+    updateTask(next)
+    roadmapTasksApi
+      .move(projectId, task.id, next.status)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['project', projectId] }))
+      .catch(() => {
+        // Roll back the optimistic move on failure.
+        updateTask(task)
+      })
   }
 
   return (

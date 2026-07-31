@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, History } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { pitchApi } from '@/api'
 
 export function PitchPage() {
@@ -13,17 +13,10 @@ export function PitchPage() {
     enabled: !!projectId,
   })
 
-  const { data: history } = useQuery({
-    queryKey: ['pitch-history', projectId],
-    queryFn: () => pitchApi.getHistory(projectId!),
-    enabled: !!projectId,
-  })
-
-  const regenerate = useMutation({
-    mutationFn: () => pitchApi.regenerate(projectId!),
+  const generate = useMutation({
+    mutationFn: () => pitchApi.generate(projectId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pitch', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['pitch-history', projectId] })
     },
   })
 
@@ -42,12 +35,12 @@ export function PitchPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-text">Pitch outline</h1>
         <button
-          onClick={() => regenerate.mutate()}
-          disabled={regenerate.isPending}
+          onClick={() => generate.mutate()}
+          disabled={generate.isPending}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-text hover:bg-bg disabled:opacity-50"
         >
-          <RefreshCw className={regenerate.isPending ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
-          Regenerate
+          <RefreshCw className={generate.isPending ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+          {generate.isPending ? 'Generating…' : 'Regenerate'}
         </button>
       </div>
 
@@ -68,22 +61,6 @@ export function PitchPage() {
           </div>
           <Section label="Differentiator" value={outline.differentiator} />
           {outline.ask && <Section label="Ask" value={outline.ask} />}
-        </div>
-      )}
-
-      {history && history.versions.length > 0 && (
-        <div className="mt-8">
-          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-text">
-            <History className="h-4 w-4" />
-            History
-          </h2>
-          <div className="space-y-2">
-            {history.versions.map((v, i) => (
-              <div key={i} className="rounded-lg border border-border bg-card p-3 text-xs text-muted">
-                {new Date(v.generated_at).toLocaleString()} — {v.pitch_outline.problem.slice(0, 80)}…
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

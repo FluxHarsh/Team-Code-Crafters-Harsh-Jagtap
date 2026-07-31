@@ -9,7 +9,6 @@ import { PitchPage } from '@/pages/dashboard/PitchPage'
 import { PersonalChatPage } from '@/pages/dashboard/PersonalChatPage'
 import { GroupChatPage } from '@/pages/dashboard/GroupChatPage'
 import { TeamMembersPanel } from '@/components/team/TeamMembersPanel'
-import { FileUploadPanel } from '@/components/files/FileUploadPanel'
 import { PlannerSuggestionsInbox } from '@/components/suggestions/PlannerSuggestionsInbox'
 import { GitHubInsightsPanel } from '@/components/github/GitHubInsightsPanel'
 import { useParams } from 'react-router-dom'
@@ -21,12 +20,6 @@ function TeamRoute() {
   const { projectId } = useParams<{ projectId: string }>()
   if (!projectId) return null
   return <TeamMembersPanel projectId={projectId} />
-}
-
-function FilesRoute() {
-  const { projectId } = useParams<{ projectId: string }>()
-  if (!projectId) return null
-  return <FileUploadPanel projectId={projectId} />
 }
 
 function SuggestionsRoute() {
@@ -69,10 +62,6 @@ export const router = createBrowserRouter([
       {
         path: 'team',
         element: <TeamRoute />,
-      },
-      {
-        path: 'files',
-        element: <FilesRoute />,
       },
       {
         path: 'chat/personal',

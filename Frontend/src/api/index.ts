@@ -6,7 +6,6 @@ import type {
   IngestDocumentResponse,
   ChatMessage,
   ChatHistoryResponse,
-  PlannerDraftRequest,
   PlannerDraftResponse,
   PlannerFeedbackRequest,
   PlannerFeedbackResponse,
@@ -14,7 +13,7 @@ import type {
   PlannerHistoryResponse,
   PlannerSuggestionsResponse,
   AcceptPlannerSuggestionResponse,
-  ScopeCriticRunResponse,
+  DismissPlannerSuggestionResponse,
   GitHubConnectResponse,
   GitHubInsightsResponse,
   PersonalChatRequest,
@@ -22,12 +21,13 @@ import type {
   GroupChatRequest,
   GroupChatResponse,
   AddTeamMemberRequest,
+  TeamMember,
   TeamMembersResponse,
-  FileUploadResponse,
-  FilesResponse,
-  DashboardSummaryResponse,
+  RoadmapTask,
+  DashboardOverview,
+  DashboardKanbanResponse,
   PitchResponse,
-  PitchHistoryResponse,
+  PitchGenerateResponse,
 } from '@/types'
 
 // ─── Projects ─────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ export const projectsApi = {
 
 export const ingestApi = {
   sendMessage: (projectId: string, content: string) =>
-    api.post<IngestMessageResponse>(`/projects/${projectId}/ingest/message`, { content }),
+    api.post<IngestMessageResponse>(`/projects/${projectId}/ingest/message`, { message: content }),
 
   uploadDocument: (projectId: string, file: File) => {
     const form = new FormData()
@@ -54,28 +54,34 @@ export const ingestApi = {
 }
 
 // ─── Planner (was planApi) ──────────────────────────────────────────────────
-// v2 is iterative and versioned — draft → feedback → approve — there is no
-// single "chat" endpoint anymore. roadmapApi.replan is gone; suggestions
-// are accepted through plannerSuggestionsApi instead.
+// v1 backend surface: draft (GET /plan/draft) → feedback (POST /plan/chat) →
+// approve (POST /plan/approve).
+
+export const roadmapTasksApi = {
+  move: (projectId: string, taskId: string, status: RoadmapTask['status']) =>
+    api.patch<{ task: RoadmapTask; risk_flagged: boolean }>(
+      `/projects/${projectId}/roadmap/tasks/${taskId}`,
+      { status }
+    ),
+}
 
 export const plannerApi = {
-  draft: (projectId: string, body?: PlannerDraftRequest) =>
-    api.post<PlannerDraftResponse>(`/projects/${projectId}/planner/draft`, body),
+  draft: (projectId: string) =>
+    api.get<PlannerDraftResponse>(`/projects/${projectId}/plan/draft`),
 
   feedback: (projectId: string, body: PlannerFeedbackRequest) =>
-    api.post<PlannerFeedbackResponse>(`/projects/${projectId}/planner/feedback`, body),
+    api.post<PlannerFeedbackResponse>(`/projects/${projectId}/plan/chat`, body),
 
   approve: (projectId: string) =>
-    api.post<PlannerApproveResponse>(`/projects/${projectId}/planner/approve`),
+    api.post<PlannerApproveResponse>(`/projects/${projectId}/plan/approve`),
 
   history: (projectId: string) =>
     api.get<PlannerHistoryResponse>(`/projects/${projectId}/planner/history`),
 }
 
-// ─── Planner Suggestions (replaces roadmapApi.replan / risksApi.reprioritize) ─
-// The old /roadmap/replan and /reprioritize endpoints, and the Reprioritizer
-// agent node, no longer exist. The Risk Watcher now produces suggestions
-// that the user explicitly accepts or dismisses.
+// ─── Planner Suggestions ────────────────────────────────────────────────────
+// The Risk Watcher produces suggestions that the user explicitly accepts
+// or dismisses.
 
 export const plannerSuggestionsApi = {
   list: (projectId: string) =>
@@ -87,16 +93,9 @@ export const plannerSuggestionsApi = {
     ),
 
   dismiss: (projectId: string, suggestionId: string) =>
-    api.post<{ dismissed: boolean }>(
+    api.post<DismissPlannerSuggestionResponse>(
       `/projects/${projectId}/planner/suggestions/${suggestionId}/dismiss`
     ),
-}
-
-// ─── Scope Critic ────────────────────────────────────────────────────────────
-
-export const scopeCriticApi = {
-  run: (projectId: string) =>
-    api.post<ScopeCriticRunResponse>(`/projects/${projectId}/scope-critic/run`),
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────────────
@@ -138,32 +137,20 @@ export const teamMembersApi = {
     api.get<TeamMembersResponse>(`/projects/${projectId}/team-members`),
 
   add: (projectId: string, body: AddTeamMemberRequest) =>
-    api.post<TeamMembersResponse>(`/projects/${projectId}/team-members`, body),
+    api.post<TeamMember>(`/projects/${projectId}/team-members`, body),
 
   remove: (projectId: string, memberId: string) =>
-    api.delete<{ removed: boolean }>(`/projects/${projectId}/team-members/${memberId}`),
-}
-
-// ─── Files (general upload surface — not just project-context intake) ──────
-
-export const fileUploadApi = {
-  upload: (projectId: string, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return api.postForm<FileUploadResponse>(`/projects/${projectId}/files`, form)
-  },
-
-  list: (projectId: string) => api.get<FilesResponse>(`/projects/${projectId}/files`),
+    api.delete<void>(`/projects/${projectId}/team-members/${memberId}`),
 }
 
 // ─── Dashboard aggregation ───────────────────────────────────────────────────
 
 export const dashboardApi = {
-  summary: (projectId: string) =>
-    api.get<DashboardSummaryResponse>(`/projects/${projectId}/dashboard`),
+  overview: (projectId: string) =>
+    api.get<DashboardOverview>(`/projects/${projectId}/dashboard/overview`),
 
   kanban: (projectId: string) =>
-    api.get<DashboardSummaryResponse>(`/projects/${projectId}/dashboard/kanban`),
+    api.get<DashboardKanbanResponse>(`/projects/${projectId}/dashboard/kanban`),
 }
 
 // ─── Pitch ───────────────────────────────────────────────────────────────────
@@ -171,11 +158,8 @@ export const dashboardApi = {
 export const pitchApi = {
   get: (projectId: string) => api.get<PitchResponse>(`/projects/${projectId}/pitch`),
 
-  regenerate: (projectId: string) =>
-    api.post<PitchResponse>(`/projects/${projectId}/pitch/regenerate`),
-
-  getHistory: (projectId: string) =>
-    api.get<PitchHistoryResponse>(`/projects/${projectId}/pitch/history`),
+  generate: (projectId: string) =>
+    api.post<PitchGenerateResponse>(`/projects/${projectId}/pitch/generate`),
 }
 
 // ─── Chat message helper type re-export (used by some hooks) ───────────────

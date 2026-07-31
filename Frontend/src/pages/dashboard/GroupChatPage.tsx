@@ -27,7 +27,7 @@ export function GroupChatPage() {
   }, [data])
 
   const send = useMutation({
-    mutationFn: (content: string) => groupChatApi.send(projectId!, { content, speaker_name: speakerName }),
+    mutationFn: (content: string) => groupChatApi.send(projectId!, { message: content, speaker_name: speakerName }),
     onMutate: (content) => {
       appendGroupMessage({
         id: generateId(),
