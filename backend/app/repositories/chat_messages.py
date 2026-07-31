@@ -31,6 +31,8 @@ async def add_message(
     content: str,
     agent_node: str | None = None,
     speaker_name: str | None = None,
+    chat_scope: str = "group",
+    mentions_ai: bool = False,
 ) -> ChatMessage:
     message = ChatMessage(
         project_id=project_id,
@@ -39,13 +41,25 @@ async def add_message(
         content=content,
         agent_node=agent_node,
         speaker_name=speaker_name,
+        chat_scope=chat_scope,
+        mentions_ai=mentions_ai,
     )
     session.add(message)
     await session.flush()
+    if phase == "coaching":
+        event_type = "personal_chat_message" if chat_scope == "personal" else "group_chat_message"
+    else:
+        event_type = "chat_message"
     await broadcast(
         project_id,
-        "chat_message",
-        {"phase": phase, "role": role, "content": content, "agent_node": agent_node},
+        event_type,
+        {
+            "phase": phase,
+            "role": role,
+            "content": content,
+            "agent_node": agent_node,
+            "chat_scope": chat_scope,
+        },
     )
     return message
 
@@ -55,11 +69,14 @@ async def list_messages(
     project_id: uuid.UUID,
     *,
     phase: str | None = None,
+    chat_scope: str | None = None,
     limit: int = 200,
 ) -> list[ChatMessage]:
     stmt = select(ChatMessage).where(ChatMessage.project_id == project_id)
     if phase is not None:
         stmt = stmt.where(ChatMessage.phase == phase)
+    if chat_scope is not None:
+        stmt = stmt.where(ChatMessage.chat_scope == chat_scope)
     stmt = stmt.order_by(ChatMessage.created_at.asc()).limit(limit)
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -87,6 +104,7 @@ async def list_messages_page(
     project_id: uuid.UUID,
     *,
     phase: str | None = None,
+    chat_scope: str | None = None,
     cursor: str | None = None,
     limit: int = 50,
 ) -> MessagePage:
@@ -100,6 +118,8 @@ async def list_messages_page(
     stmt = select(ChatMessage).where(ChatMessage.project_id == project_id)
     if phase is not None:
         stmt = stmt.where(ChatMessage.phase == phase)
+    if chat_scope is not None:
+        stmt = stmt.where(ChatMessage.chat_scope == chat_scope)
     if cursor is not None:
         cursor_created_at, cursor_id = _decode_cursor(cursor)
         stmt = stmt.where(

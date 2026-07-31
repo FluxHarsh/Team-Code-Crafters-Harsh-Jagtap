@@ -32,6 +32,7 @@ from app.errors import ConflictError
 from app.repositories import projects as projects_repo
 from app.routers.common import get_project_or_404
 from app.scheduler.scheduler import deregister_project_jobs
+from app.services.project_context import build_project_context, detect_missing_fields, is_complete
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,18 @@ class ProjectSubmitResponse(BaseModel):
     status: str
 
 
+class ProjectContextResponse(BaseModel):
+    hackathon_details: dict
+    team: list
+    project: dict
+    repository: dict | None
+    supporting_documents: list
+    presentation: dict | None
+    design_links: list
+    missing_fields: list[str]
+    is_complete: bool
+
+
 @router.post("", response_model=ProjectCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
     body: ProjectCreateRequest, session: AsyncSession = Depends(get_db)
@@ -95,6 +108,29 @@ async def get_project_state(
         github_state=project.github_state,
         hours_remaining=float(project.hours_remaining) if project.hours_remaining is not None else None,
         next_action=project.next_action,
+    )
+
+
+@router.get("/{project_id}/context", response_model=ProjectContextResponse)
+async def get_project_context(
+    project_id: str, session: AsyncSession = Depends(get_db)
+) -> ProjectContextResponse:
+    """A1: the assembled ProjectContext plus the explicit Missing
+    Information Detector's report -- what the Intake loop gates
+    ready_for_planning on, exposed for the frontend to render a
+    checklist."""
+    project = await get_project_or_404(session, project_id)
+    context = await build_project_context(session, project)
+    return ProjectContextResponse(
+        hackathon_details=context.hackathon_details,
+        team=context.team,
+        project=context.project,
+        repository=context.repository,
+        supporting_documents=context.supporting_documents,
+        presentation=context.presentation,
+        design_links=context.design_links,
+        missing_fields=detect_missing_fields(context),
+        is_complete=is_complete(context),
     )
 
 

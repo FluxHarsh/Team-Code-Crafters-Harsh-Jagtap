@@ -22,15 +22,18 @@ from app.logging_config import configure_logging, install_request_id_middleware
 from app.routers import (
     agent_graph,
     chat,
+    dashboard,
     github,
     health,
     ingestion,
     pitch,
+    planner_suggestions,
     planning,
     reprioritize,
     risks,
     roadmap,
     projects,
+    team_members,
     ws,
 )
 from app.scheduler.scheduler import shutdown_scheduler, start_scheduler
@@ -71,8 +74,11 @@ def create_app() -> FastAPI:
     app.include_router(github.router)
     app.include_router(risks.router)
     app.include_router(reprioritize.router)
+    app.include_router(planner_suggestions.router)
     app.include_router(pitch.router)
     app.include_router(chat.router)
+    app.include_router(team_members.router)
+    app.include_router(dashboard.router)
     app.include_router(agent_graph.router)
     app.include_router(ws.router)
 

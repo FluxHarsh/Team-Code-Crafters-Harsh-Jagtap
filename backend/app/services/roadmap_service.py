@@ -23,6 +23,7 @@ from app.errors import ConflictError, NotFoundError
 from app.models.project import Project
 from app.repositories import critique_history as critique_history_repo
 from app.repositories import graph as graph_repo
+from app.repositories import planner_history as planner_history_repo
 from app.repositories import projects as projects_repo
 from app.repositories.locks import try_acquire_replan_lock
 from app.ws.connection_manager import broadcast
@@ -107,6 +108,17 @@ async def replan_roadmap(
     )
 
     await graph_repo.sync_roadmap(driver, project.id, new_roadmap)
+
+    await planner_history_repo.add_revision(
+        session,
+        project_id=project.id,
+        reason=reason,
+        scope_snapshot=new_scope,
+        roadmap_snapshot=new_roadmap,
+    )
+    await broadcast(
+        project.id, "planner_revision_created", {"reason": reason, "roadmap": new_roadmap}
+    )
 
     logger.info("roadmap_replanned", extra={"project_id": str(project.id), "reason": reason})
     return ReplanResult(status=updated.status, roadmap=new_roadmap, next_action=updated.next_action)

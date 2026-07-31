@@ -65,6 +65,11 @@ class GithubStateResponse(BaseModel):
     last_polled_at: str | None
 
 
+class GithubInsightsResponse(BaseModel):
+    insights: list[str]
+    last_polled_at: str | None
+
+
 @router.post("/{project_id}/github/connect", response_model=GithubConnectResponse)
 async def post_github_connect(
     project_id: str,
@@ -125,4 +130,19 @@ async def get_github_state(
         open_prs=state.get("open_prs", []),
         issues=state.get("issues", []),
         last_polled_at=state.get("last_polled_at"),
+    )
+
+
+@router.get("/{project_id}/github/insights", response_model=GithubInsightsResponse)
+async def get_github_insights(
+    project_id: str, session: AsyncSession = Depends(get_db)
+) -> GithubInsightsResponse:
+    """Spec Section 8's GET .../github/insights -- the stored Insight
+    Generator output (app.agents.nodes.github_watcher.build_insights),
+    already computed and cached on github_state at poll time, so this
+    is a cheap read, not a recompute."""
+    project = await get_project_or_404(session, project_id)
+    state = project.github_state or {}
+    return GithubInsightsResponse(
+        insights=state.get("insights", []), last_polled_at=state.get("last_polled_at")
     )
