@@ -21,6 +21,8 @@ from app.repositories import chat_messages as chat_messages_repo
 from app.repositories import documents as documents_repo
 from app.repositories import projects as projects_repo
 from app.services.document_extraction import extract_text
+from app.services.project_context import ProjectContext, detect_missing_fields, is_complete
+from app.ws.connection_manager import broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +53,31 @@ async def handle_ingest_message(
     )
 
     reply = result_state["reply"]
-    ready_for_planning = result_state["ready_for_planning"]
+    llm_ready = result_state["ready_for_planning"]
     updated_project_idea = result_state["updated_project_idea"]
+
+    # A1: don't just trust the Intake node's self-reported flag -- run
+    # the explicit Missing Information Detector against a preview of
+    # the context this turn would leave behind (project_idea hasn't
+    # been persisted yet, so build the preview in memory rather than
+    # re-querying).
+    preview_context = ProjectContext(
+        hackathon_details=project.hackathon_details or {},
+        team=project.team or [],
+        project=updated_project_idea,
+        repository=None,
+        supporting_documents=[],
+        presentation=project.pitch_outline,
+    )
+    ready_for_planning = llm_ready and is_complete(preview_context)
+    missing_fields = detect_missing_fields(preview_context)
+
+    if llm_ready and not ready_for_planning:
+        required_missing = [f for f in missing_fields if f in ("problem", "solution", "target_user")]
+        if required_missing:
+            reply = (
+                f"{reply}\n\n(Still need: {', '.join(required_missing)} before I can hand this to the Planner.)"
+            )
 
     await chat_messages_repo.add_message(
         session,

@@ -56,6 +56,69 @@ def guess_answered_by(message: str) -> str:
     return "team_assistant"
 
 
+# --- Workstream A4: Supervisor as central router ---
+# Expanded category set for post-approval @AI-triggered chat traffic.
+# Still deliberately rule-based (same rules-vs-LLM split as the rest of
+# this module) -- a wrong category only affects routing/labeling, never
+# the underlying LLM-generated answer text.
+CHAT_CATEGORIES = (
+    "REPLAN_REQUEST",
+    "RISK_QUERY",
+    "GITHUB_STATUS",
+    "PITCH_REQUEST",
+    "SCOPE_CHECK",
+    "QUESTION",
+    "UNKNOWN",
+)
+
+_SCOPE_CHECK_PHRASES = ("in scope", "out of scope", "scope creep", "should we cut", "overscoped")
+_PITCH_PHRASES = ("pitch", "demo flow", "differentiator", "elevator pitch", "hook")
+_GITHUB_PHRASES = ("commit", "pull request", " pr ", "pr#", "branch", "github", "repo")
+_RISK_PHRASES = ("risk", "flag", "blocked", "stuck", "fix this", "fix it", "reprioritize")
+
+
+def classify_chat_category(message: str) -> str:
+    """Category-only classifier for A4's expanded routing table
+    (Supervisor -> Planner/Scope Critic/GitHub Watcher query/Risk
+    Watcher query/Pitch Agent/team-assistant fallback). Distinct from
+    classify_coach_message below, which additionally resolves a
+    specific risk_id for the reprioritize action -- this one only
+    decides which *kind* of question/request it is, checked in a fixed
+    priority order (replan/reprioritize phrasing wins over a same-message
+    scope mention, etc.) so the categories don't need to be mutually
+    exhaustive by keyword overlap."""
+    if not message or not message.strip():
+        return "UNKNOWN"
+    lowered = f" {message.lower()} "
+
+    if any(phrase in lowered for phrase in REPLAN_PHRASES):
+        return "REPLAN_REQUEST"
+    if any(phrase in lowered for phrase in _RISK_PHRASES):
+        return "RISK_QUERY"
+    if any(phrase in lowered for phrase in _GITHUB_PHRASES):
+        return "GITHUB_STATUS"
+    if any(phrase in lowered for phrase in _PITCH_PHRASES):
+        return "PITCH_REQUEST"
+    if any(phrase in lowered for phrase in _SCOPE_CHECK_PHRASES):
+        return "SCOPE_CHECK"
+    if "?" in message or message.lower().startswith(("what", "how", "why", "when", "who", "is ", "are ", "can ")):
+        return "QUESTION"
+    return "UNKNOWN"
+
+
+# category -> answered_by label, so callers get the richer A4 category
+# without every consumer needing its own mapping table.
+CATEGORY_TO_ANSWERED_BY = {
+    "REPLAN_REQUEST": "planner",
+    "RISK_QUERY": "risk_watcher",
+    "GITHUB_STATUS": "github_watcher",
+    "PITCH_REQUEST": "pitch_agent",
+    "SCOPE_CHECK": "scope_critic",
+    "QUESTION": "team_assistant",
+    "UNKNOWN": "team_assistant",
+}
+
+
 def classify_coach_message(message: str, unresolved_risks: list[dict]) -> tuple[str, str | None]:
     """Returns (action, risk_id). action is "replan", "reprioritize", or
     "question". risk_id is only ever meaningful for "reprioritize" --

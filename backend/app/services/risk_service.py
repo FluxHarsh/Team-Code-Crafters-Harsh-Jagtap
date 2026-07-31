@@ -26,9 +26,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.nodes.reprioritizer import run_reprioritizer
 from app.agents.nodes.risk_watcher import run_risk_watcher
-from app.errors import NotFoundError
+from app.errors import ConflictError, NotFoundError
+from app.models.planner_suggestion import PlannerSuggestion
 from app.models.project import Project
 from app.repositories import graph as graph_repo
+from app.repositories import planner_suggestions as planner_suggestions_repo
 from app.repositories import projects as projects_repo
 from app.services.roadmap_service import replan_roadmap
 from app.ws.connection_manager import broadcast
@@ -41,7 +43,15 @@ TRAVERSAL_MAX_HOPS = 3
 
 
 @dataclass
-class ReprioritizeResult:
+class PlannerSuggestionResult:
+    id: str
+    status: str
+    decision: str | None
+    rationale: str
+
+
+@dataclass
+class AcceptResult:
     decision: str
     rationale: str
     roadmap_replanned: bool
@@ -108,16 +118,15 @@ async def resolve_risk(
     return risk
 
 
-async def reprioritize_risk(
+async def propose_reprioritization(
     session: AsyncSession, driver: AsyncDriver, project: Project, risk_id: str, *, reason: str = "manual_request"
-) -> ReprioritizeResult:
-    """Section 5.5's full flow: find the risk, traverse Neo4j for what
-    fixing it would unblock, ask the Reprioritizer to decide, then --
-    regardless of which decision came back -- actually apply it by
-    running Phase 4's replan_roadmap (the Planner sees the risk's
-    suggested_fix and the Reprioritizer's decision/rationale folded into
-    the replan reason, so the rebuilt roadmap reflects the call made
-    here) and mark the risk resolved."""
+) -> PlannerSuggestionResult:
+    """Workstream A3 replacement for the old auto-apply reprioritize_risk:
+    find the risk, traverse Neo4j for what fixing it would unblock, ask
+    the Reprioritizer to decide -- then, instead of immediately calling
+    replan_roadmap, write a pending planner_suggestions row and stop.
+    Nothing about the roadmap changes until a human calls
+    accept_suggestion."""
     risks = list(project.risks or [])
     risk = next((r for r in risks if r.get("id") == risk_id), None)
     if risk is None:
@@ -143,18 +152,76 @@ async def reprioritize_risk(
         trigger=reason,
     )
 
-    replan_reason = (
-        f"reprioritize risk {risk_id} ({risk.get('risk')}): "
-        f"Reprioritizer decided '{decision.decision}' -- {decision.rationale}. "
-        f"Suggested fix: {risk.get('suggested_fix')}"
+    suggestion = await planner_suggestions_repo.create_suggestion(
+        session,
+        project_id=project.id,
+        source="risk_reprioritization",
+        risk_id=risk_id,
+        decision=decision.decision,
+        rationale=decision.rationale,
+        context={
+            "risk": risk,
+            "downstream_milestones": downstream_milestones,
+            "suggested_fix": risk.get("suggested_fix"),
+        },
     )
-    await replan_roadmap(session, driver, project, reason=replan_reason)
-    await resolve_risk(
-        session, driver, project, risk_id, resolution_note=f"Reprioritizer: {decision.decision} -- {decision.rationale}"
+    await broadcast(
+        project.id,
+        "planner_suggestion_created",
+        {"id": str(suggestion.id), "risk_id": risk_id, "decision": decision.decision, "rationale": decision.rationale},
     )
 
     logger.info(
-        "risk_reprioritized",
-        extra={"project_id": str(project.id), "risk_id": risk_id, "decision": decision.decision},
+        "risk_reprioritization_proposed",
+        extra={"project_id": str(project.id), "risk_id": risk_id, "suggestion_id": str(suggestion.id)},
     )
-    return ReprioritizeResult(decision=decision.decision, rationale=decision.rationale, roadmap_replanned=True)
+    return PlannerSuggestionResult(
+        id=str(suggestion.id), status=suggestion.status, decision=decision.decision, rationale=decision.rationale
+    )
+
+
+async def accept_suggestion(
+    session: AsyncSession, driver: AsyncDriver, project: Project, suggestion_id
+) -> AcceptResult:
+    """The only path that turns a pending planner_suggestions row into
+    an actual roadmap change -- runs replan_roadmap (which itself writes
+    the planner_history row) and, if the suggestion came from a risk,
+    marks that risk resolved."""
+    suggestion = await planner_suggestions_repo.get_suggestion(session, suggestion_id)
+    if suggestion is None or suggestion.project_id != project.id:
+        raise NotFoundError(f"Suggestion {suggestion_id} not found")
+    if suggestion.status != "pending":
+        raise ConflictError(f"Suggestion already {suggestion.status}")
+
+    replan_reason = (
+        f"accepted planner suggestion {suggestion.id} "
+        f"(risk {suggestion.risk_id}): {suggestion.decision} -- {suggestion.rationale}"
+    )
+    await replan_roadmap(session, driver, project, reason=replan_reason)
+
+    if suggestion.risk_id:
+        await resolve_risk(
+            session, driver, project, suggestion.risk_id,
+            resolution_note=f"Reprioritizer: {suggestion.decision} -- {suggestion.rationale}",
+        )
+
+    await planner_suggestions_repo.set_status(session, suggestion.id, "accepted")
+    await broadcast(project.id, "planner_suggestion_accepted", {"id": str(suggestion.id)})
+
+    logger.info(
+        "planner_suggestion_accepted",
+        extra={"project_id": str(project.id), "suggestion_id": str(suggestion.id)},
+    )
+    return AcceptResult(decision=suggestion.decision or "", rationale=suggestion.rationale, roadmap_replanned=True)
+
+
+async def dismiss_suggestion(session: AsyncSession, project: Project, suggestion_id) -> PlannerSuggestion:
+    suggestion = await planner_suggestions_repo.get_suggestion(session, suggestion_id)
+    if suggestion is None or suggestion.project_id != project.id:
+        raise NotFoundError(f"Suggestion {suggestion_id} not found")
+    if suggestion.status != "pending":
+        raise ConflictError(f"Suggestion already {suggestion.status}")
+
+    updated = await planner_suggestions_repo.set_status(session, suggestion.id, "dismissed")
+    await broadcast(project.id, "planner_suggestion_dismissed", {"id": str(suggestion.id)})
+    return updated

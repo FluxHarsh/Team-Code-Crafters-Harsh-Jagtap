@@ -93,6 +93,50 @@ def match_text_to_task(text: str, files: list[str], roadmap: list[dict]) -> str 
     return best_task_id
 
 
+# A repo poll with zero commits in this window is worth calling out
+# explicitly rather than making the team infer it from an empty list.
+INACTIVITY_HOURS_THRESHOLD = 10
+
+
+def build_insights(*, github_state: dict, roadmap: list[dict]) -> list[str]:
+    """Workstream A8: turns github_state into a handful of human-
+    readable insight strings ("Frontend inactive for 10 hours", "No
+    commits today", "Open PR blocked", "Documentation missing") that
+    the Supervisor can surface for a GITHUB_STATUS query, or that a
+    future Risk Watcher rule could turn into a suggestion. Pure
+    computation over an already-fetched github_state -- no extra API
+    calls."""
+    insights: list[str] = []
+
+    commits = github_state.get("commits", [])
+    if not commits:
+        insights.append("No commits recorded yet.")
+    else:
+        unmatched = sum(1 for c in commits if not c.get("matched_task"))
+        if unmatched:
+            insights.append(f"{unmatched} recent commit(s) don't match any roadmap task.")
+
+    last_polled_at = github_state.get("last_polled_at")
+    if last_polled_at:
+        try:
+            polled = datetime.fromisoformat(last_polled_at.replace("Z", "+00:00"))
+            hours_since = (datetime.now(timezone.utc) - polled).total_seconds() / 3600
+            if hours_since >= INACTIVITY_HOURS_THRESHOLD:
+                insights.append(f"No GitHub activity picked up in the last {round(hours_since)} hours.")
+        except ValueError:
+            pass
+
+    for pr in github_state.get("open_prs", []):
+        if pr.get("status") == "stuck":
+            insights.append(f"Open PR #{pr.get('number')} has been blocked for {pr.get('hours_open')}h.")
+
+    todo_task_ids = {t.get("id") for t in roadmap if "doc" in (t.get("task") or "").lower()}
+    if todo_task_ids and not any(c.get("matched_task") in todo_task_ids for c in commits):
+        insights.append("Documentation task has no matching activity.")
+
+    return insights
+
+
 async def run_github_watcher(
     session: AsyncSession,
     *,
@@ -175,6 +219,7 @@ async def run_github_watcher(
             "issues": issues,
             "last_polled_at": now.isoformat(),
         }
+        github_state["insights"] = build_insights(github_state=github_state, roadmap=roadmap)
 
         await agent_run_log_repo.finish_run(
             session,

@@ -44,6 +44,20 @@ class Project(Base):
         JSONB, nullable=False, default=dict, server_default="{}"
     )
 
+    # { name, theme, duration, judging_criteria, deadline (ISO),
+    #   problem_statement, prize, tracks } -- Workstream A1's
+    # ProjectContext "Hackathon Details" category. Optional/informational
+    # (see app/services/project_context.py for why it's not gated on).
+    hackathon_details: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+
+    # [ { name, role, skills: [], tech_stack: [], availability } ] --
+    # Workstream A1's ProjectContext "Team" category.
+    team: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+
     # { mvp_features: [], cut_features: [], assumptions: [] }
     scope: Mapped[dict] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"

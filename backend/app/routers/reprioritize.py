@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db, get_neo4j
 from app.routers.common import get_project_or_404
-from app.services.risk_service import reprioritize_risk
+from app.services.risk_service import propose_reprioritization
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,10 @@ class ReprioritizeRequest(BaseModel):
 
 
 class ReprioritizeResponse(BaseModel):
-    decision: str
+    suggestion_id: str
+    status: str
+    decision: str | None
     rationale: str
-    roadmap_replanned: bool
 
 
 @router.post("/{project_id}/reprioritize", response_model=ReprioritizeResponse)
@@ -43,14 +44,18 @@ async def post_reprioritize(
     session: AsyncSession = Depends(get_db),
     driver: AsyncDriver = Depends(get_neo4j),
 ) -> ReprioritizeResponse:
+    """A3: this no longer applies the change -- it proposes it. The
+    Reprioritizer still decides drop/extend/reassign, but the result is
+    a pending planner_suggestions row; POST
+    .../planner/suggestions/{id}/accept is what actually replans."""
     project = await get_project_or_404(session, project_id)
 
-    result = await reprioritize_risk(session, driver, project, body.risk_id, reason="manual_request")
+    result = await propose_reprioritization(session, driver, project, body.risk_id, reason="manual_request")
 
     logger.info(
-        "reprioritize completed",
-        extra={"project_id": str(project.id), "risk_id": body.risk_id, "decision": result.decision},
+        "reprioritize proposed",
+        extra={"project_id": str(project.id), "risk_id": body.risk_id, "suggestion_id": result.id},
     )
     return ReprioritizeResponse(
-        decision=result.decision, rationale=result.rationale, roadmap_replanned=result.roadmap_replanned
+        suggestion_id=result.id, status=result.status, decision=result.decision, rationale=result.rationale
     )
