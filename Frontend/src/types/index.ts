@@ -334,7 +334,9 @@ export interface PersonalChatRequest {
 export interface PersonalChatResponse {
   reply: string | null
   answered_by: string | null
+  ai_invoked?: boolean
 }
+
 
 export interface GroupChatRequest {
   message: string

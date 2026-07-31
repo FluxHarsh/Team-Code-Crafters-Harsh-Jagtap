@@ -60,6 +60,15 @@ class Settings(BaseSettings):
         default=120, alias="DEFAULT_POLL_INTERVAL_SECONDS"
     )
 
+    # --- Security & Deployment ---
+    cors_allowed_origins: str = Field(
+        default="*", alias="CORS_ALLOWED_ORIGINS"
+    )
+    max_upload_size_bytes: int = Field(
+        default=10 * 1024 * 1024, alias="MAX_UPLOAD_SIZE_BYTES"
+    )
+
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -21,8 +21,10 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.dependencies import get_db
 from app.errors import UnsupportedMediaTypeError
+
 from app.repositories import chat_messages as chat_messages_repo
 from app.routers.common import get_project_or_404
 from app.services.document_extraction import SUPPORTED_DOCUMENT_MIME_TYPES
@@ -86,13 +88,31 @@ async def post_ingest_document(
     project = await get_project_or_404(session, project_id)
 
     content_type = file.content_type or ""
+    # Map extension fallback if generic octet-stream was sent
+    if content_type == "application/octet-stream" and file.filename:
+        ext = file.filename.split(".")[-1].lower()
+        if ext == "pdf":
+            content_type = "application/pdf"
+        elif ext in ("docx", "doc"):
+            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif ext == "txt":
+            content_type = "text/plain"
+        elif ext == "md":
+            content_type = "text/markdown"
+
     if content_type not in SUPPORTED_DOCUMENT_MIME_TYPES:
+        allowed = list(SUPPORTED_DOCUMENT_MIME_TYPES.keys())
         raise UnsupportedMediaTypeError(
-            f"Unsupported file type {content_type!r}; expected one of "
-            f"{sorted(SUPPORTED_DOCUMENT_MIME_TYPES.values())}"
+            f"Unsupported file type {content_type!r}; expected one of MIME types {allowed}"
         )
 
     raw = await file.read()
+    settings = get_settings()
+    if len(raw) > settings.max_upload_size_bytes:
+        raise UnsupportedMediaTypeError(
+            f"File size exceeds maximum allowed limit of {settings.max_upload_size_bytes} bytes."
+        )
+
 
     result = await handle_ingest_document(
         session,

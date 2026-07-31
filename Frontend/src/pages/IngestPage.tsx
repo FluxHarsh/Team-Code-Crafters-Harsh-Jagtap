@@ -5,7 +5,6 @@ import { ingestApi } from '@/api'
 import { useStore } from '@/store'
 import { ChatThread } from '@/components/chat/ChatThread'
 import { ChatInput } from '@/components/chat/ChatInput'
-import { DocumentDropzone } from '@/components/shared/DocumentDropzone'
 import { generateId } from '@/lib/utils'
 
 // Hits the real backend's /ingest/message, /ingest/document, /ingest/history
@@ -24,7 +23,18 @@ export function IngestPage() {
   })
 
   useEffect(() => {
-    if (history) history.messages.forEach((m) => appendCoachMessage(m))
+    if (history?.messages) {
+      history.messages.forEach((m) => {
+        const exists = coachMessages.some(
+          (existing) =>
+            existing.id === m.id ||
+            (existing.content === m.content && existing.role === m.role)
+        )
+        if (!exists) {
+          appendCoachMessage(m)
+        }
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history])
 
@@ -63,20 +73,19 @@ export function IngestPage() {
     <div className="mx-auto flex h-screen max-w-2xl flex-col">
       <div className="border-b border-border px-6 py-4">
         <h1 className="text-lg font-semibold text-text">Tell us about your project</h1>
-        <p className="text-sm text-muted">Chat with the coach or drop in any docs you already have.</p>
+        <p className="text-sm text-muted">Chat with the coach or attach any docs you already have.</p>
       </div>
 
       <ChatThread messages={coachMessages} />
 
-      <div className="border-t border-border p-4">
-        <DocumentDropzone onFileSelected={(file) => uploadDocument.mutate(file)} disabled={uploadDocument.isPending} />
-      </div>
-
       <ChatInput
         onSend={(content) => sendMessage.mutate(content)}
+        onFileSelected={(file) => uploadDocument.mutate(file)}
+        isUploading={uploadDocument.isPending}
         disabled={sendMessage.isPending}
         placeholder="Describe your idea…"
       />
     </div>
   )
 }
+
