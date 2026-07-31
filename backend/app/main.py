@@ -14,9 +14,12 @@ Section 7).
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import get_settings
 from app.db.postgres import dispose_postgres, get_engine
 from app.db.neo4j import dispose_neo4j, get_driver
+
 from app.errors import register_exception_handlers
 from app.logging_config import configure_logging, install_request_id_middleware
 from app.routers import (
@@ -60,6 +63,17 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Hackathon Project Coach — Backend", lifespan=lifespan)
 
+    # Security: CORS middleware configuration
+    settings = get_settings()
+    origins = [o.strip() for o in settings.cors_allowed_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins if origins else ["*"],
+        allow_credentials=True if origins and "*" not in origins else False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     install_request_id_middleware(app)
     register_exception_handlers(app)
 
@@ -83,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(ws.router)
 
     return app
+
 
 
 app = create_app()

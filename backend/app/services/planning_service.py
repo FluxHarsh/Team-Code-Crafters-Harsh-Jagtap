@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import run_planning_turn
+from app.errors import UnprocessableEntityError
 from app.models.project import Project
+
 from app.repositories import chat_messages as chat_messages_repo
 from app.repositories import critique_history as critique_history_repo
 from app.repositories import projects as projects_repo
@@ -65,6 +67,27 @@ async def handle_plan_chat(
     draft_scope = result_state["draft_scope"]
     draft_roadmap = result_state["draft_roadmap"]
 
+    # Validate planner output before saving
+    has_scope = isinstance(draft_scope, dict) and (
+        bool(draft_scope.get("mvp_features"))
+        or bool(draft_scope.get("cut_features"))
+        or bool(draft_scope.get("assumptions"))
+    )
+    has_roadmap = isinstance(draft_roadmap, list) and len(draft_roadmap) > 0
+
+    if not has_scope and not has_roadmap:
+        raise UnprocessableEntityError(
+            "Planner agent failed to generate a valid plan draft. Please retry."
+        )
+
+    # Validate roadmap tasks schema
+    valid_statuses = {"todo", "in_progress", "blocked", "done"}
+    for task in draft_roadmap:
+        if not isinstance(task, dict) or "id" not in task or "task" not in task:
+            raise UnprocessableEntityError("Planner output contains malformed roadmap tasks.")
+        if task.get("status") not in valid_statuses:
+            task["status"] = "todo"
+
     await chat_messages_repo.add_message(
         session,
         project_id=project.id,
@@ -81,6 +104,7 @@ async def handle_plan_chat(
         roadmap=draft_roadmap,
         next_action="planner",
     )
+
     # The combined { draft_scope, draft_roadmap } shape Section 6
     # documents for this event -- update_project already fired two
     # separate generic state_updated events (path="scope",

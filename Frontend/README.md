@@ -70,13 +70,15 @@ src/
 
 **Coach Chat Panel** — a slide-in drawer toggled from the top bar, persistent across all dashboard routes. Fetches `chat/history` on first open, then appends to local state from direct API responses + WebSocket `chat_message` events (de-duplicated by `id`).
 
-## Backend proxy
+## Deployment (Vercel)
 
-`vite.config.ts` proxies:
-- `/api` → `http://localhost:8000`  
-- WebSocket `/api/v1/projects/:id/updates` → `ws://localhost:8000`
+1. Connect the `Frontend/` folder to your Vercel project.
+2. Set Environment Variables in Vercel settings:
+   - `VITE_API_BASE_URL`: `https://your-backend-app.onrender.com/api/v1`
+   - `VITE_WS_BASE_URL`: `wss://your-backend-app.onrender.com`
+3. Deploy command will run `npm run build` (output: `dist/`).
 
-Change the target in `vite.config.ts` if your backend runs on a different port.
+`vercel.json` provides route rewriting for single page application routing and backend proxy fallback.
 
 ## Build for production
 
@@ -84,3 +86,4 @@ Change the target in `vite.config.ts` if your backend runs on a different port.
 npm run build
 # Output: dist/
 ```
+
