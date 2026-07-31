@@ -52,6 +52,7 @@ interface StoreState {
   setPlannerSuggestions: (suggestions: PlannerSuggestion[]) => void
   addPlannerSuggestion: (suggestion: PlannerSuggestion) => void
   markPlannerSuggestionAccepted: (suggestionId: string) => void
+  markPlannerSuggestionDismissed: (suggestionId: string) => void
 
   // ─── v2: GitHub insights ─────────────────────────────────────────────
   githubInsights: GitHubInsight[]
@@ -143,6 +144,12 @@ export const useStore = create<StoreState>((set) => ({
     set((state) => ({
       plannerSuggestions: state.plannerSuggestions.map((s) =>
         s.id === suggestionId ? { ...s, status: 'accepted' } : s
+      ),
+    })),
+  markPlannerSuggestionDismissed: (suggestionId) =>
+    set((state) => ({
+      plannerSuggestions: state.plannerSuggestions.map((s) =>
+        s.id === suggestionId ? { ...s, status: 'dismissed' } : s
       ),
     })),
 

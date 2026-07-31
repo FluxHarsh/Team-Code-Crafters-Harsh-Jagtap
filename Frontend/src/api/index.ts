@@ -2,8 +2,8 @@ import { api } from './client'
 import type {
   Project,
   CreateProjectResponse,
-  ContextMessageResponse,
-  ContextFileUploadResponse,
+  IngestMessageResponse,
+  IngestDocumentResponse,
   ChatMessage,
   ChatHistoryResponse,
   PlannerDraftRequest,
@@ -33,26 +33,24 @@ import type {
 // ─── Projects ─────────────────────────────────────────────────────────────
 
 export const projectsApi = {
-  create: (idea: string) => api.post<CreateProjectResponse>('/projects', { idea }),
+  create: (name: string) => api.post<CreateProjectResponse>('/projects', { name }),
   get: (projectId: string) => api.get<Project>(`/projects/${projectId}`),
 }
 
-// ─── Project Context (was ingestApi) ───────────────────────────────────────
-// /ingest/* is deprecated in v2, kept temporarily but marked for removal.
-// Frontend now calls the v2 /context/* endpoints exclusively.
+// ─── Ingest ──────────────────────────────────────────────────────────────
 
-export const projectContextApi = {
+export const ingestApi = {
   sendMessage: (projectId: string, content: string) =>
-    api.post<ContextMessageResponse>(`/projects/${projectId}/context/message`, { content }),
+    api.post<IngestMessageResponse>(`/projects/${projectId}/ingest/message`, { content }),
 
-  uploadFile: (projectId: string, file: File) => {
+  uploadDocument: (projectId: string, file: File) => {
     const form = new FormData()
     form.append('file', file)
-    return api.postForm<ContextFileUploadResponse>(`/projects/${projectId}/context/files`, form)
+    return api.postForm<IngestDocumentResponse>(`/projects/${projectId}/ingest/document`, form)
   },
 
   getHistory: (projectId: string) =>
-    api.get<ChatHistoryResponse>(`/projects/${projectId}/context/history`),
+    api.get<ChatHistoryResponse>(`/projects/${projectId}/ingest/history`),
 }
 
 // ─── Planner (was planApi) ──────────────────────────────────────────────────
@@ -81,16 +79,16 @@ export const plannerApi = {
 
 export const plannerSuggestionsApi = {
   list: (projectId: string) =>
-    api.get<PlannerSuggestionsResponse>(`/projects/${projectId}/planner-suggestions`),
+    api.get<PlannerSuggestionsResponse>(`/projects/${projectId}/planner/suggestions`),
 
   accept: (projectId: string, suggestionId: string) =>
     api.post<AcceptPlannerSuggestionResponse>(
-      `/projects/${projectId}/planner-suggestions/${suggestionId}/accept`
+      `/projects/${projectId}/planner/suggestions/${suggestionId}/accept`
     ),
 
   dismiss: (projectId: string, suggestionId: string) =>
     api.post<{ dismissed: boolean }>(
-      `/projects/${projectId}/planner-suggestions/${suggestionId}/dismiss`
+      `/projects/${projectId}/planner/suggestions/${suggestionId}/dismiss`
     ),
 }
 
@@ -104,8 +102,10 @@ export const scopeCriticApi = {
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
 export const githubApi = {
-  connect: (projectId: string, repoUrl: string) =>
-    api.post<GitHubConnectResponse>(`/projects/${projectId}/github/connect`, { repo_url: repoUrl }),
+  connect: (
+    projectId: string,
+    body: { repo_full_name: string; access_token: string; poll_interval_seconds: number }
+  ) => api.post<GitHubConnectResponse>(`/projects/${projectId}/github/connect`, body),
 }
 
 export const githubInsightsApi = {
@@ -141,7 +141,7 @@ export const teamMembersApi = {
     api.post<TeamMembersResponse>(`/projects/${projectId}/team-members`, body),
 
   remove: (projectId: string, memberId: string) =>
-    api.post<{ removed: boolean }>(`/projects/${projectId}/team-members/${memberId}/remove`),
+    api.delete<{ removed: boolean }>(`/projects/${projectId}/team-members/${memberId}`),
 }
 
 // ─── Files (general upload surface — not just project-context intake) ──────

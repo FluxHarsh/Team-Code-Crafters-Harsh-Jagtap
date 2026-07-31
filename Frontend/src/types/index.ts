@@ -1,8 +1,7 @@
 // ─── Project ────────────────────────────────────────────────────────────────
 
-// v2: 'intake' renamed to 'project_context'
 export type ProjectStatus =
-  | 'project_context'
+  | 'intake'
   | 'planning'
   | 'active'
   | 'at_risk'
@@ -88,10 +87,10 @@ export interface PitchOutline {
 export interface TeamMember {
   id: string
   name: string
-  email?: string
   role?: string
-  avatar_initials: string
-  joined_at?: string
+  skills: string[]
+  tech_stack: string[]
+  availability: string
 }
 
 export type FileStatus = 'uploading' | 'processing' | 'processed' | 'failed'
@@ -186,18 +185,14 @@ export interface ChatMessage {
 
 // ─── Agent Graph ─────────────────────────────────────────────────────────────
 
-// v2 node roster — 'intake' → 'project_context_builder',
-// 'reprioritizer' removed, 'planner_suggestion' + 'file_intake' +
-// 'team_assistant' added
 export type AgentNodeKey =
   | 'supervisor'
-  | 'project_context_builder'
+  | 'intake'
   | 'scope_critic'
   | 'planner'
-  | 'planner_suggestion'
+  | 'reprioritizer'
   | 'github_watcher'
   | 'risk_watcher'
-  | 'file_intake'
   | 'pitch_agent'
   | 'team_assistant'
 
@@ -216,28 +211,25 @@ export interface AgentGraphState {
 
 // ─── WebSocket Events ────────────────────────────────────────────────────────
 
-// v2: 9 new event types added alongside the original 10
+// 17 event types total, matching Section 9 of the tech doc
 export type WSEventType =
-  | 'plan_draft_updated'
-  | 'plan_approved'
+  | 'connected'
   | 'node_activated'
   | 'state_updated'
+  | 'plan_draft_updated'
+  | 'plan_approved'
   | 'task_moved'
   | 'risk_flagged'
   | 'risk_resolved'
   | 'pitch_ready'
   | 'chat_message'
-  | 'connected'
-  // v2 additions
+  | 'personal_chat_message'
+  | 'group_chat_message'
+  | 'team_updated'
   | 'planner_revision_created'
   | 'planner_suggestion_created'
   | 'planner_suggestion_accepted'
-  | 'github_insight_created'
-  | 'project_context_updated'
-  | 'file_processed'
-  | 'team_updated'
-  | 'group_chat_message'
-  | 'personal_chat_message'
+  | 'planner_suggestion_dismissed'
 
 // Backend sends {"event": "...", "payload": {...}}
 export interface WSEvent {
@@ -253,13 +245,13 @@ export interface CreateProjectResponse {
   greeting: string
 }
 
-// projectContextApi (was ingestApi)
-export interface ContextMessageResponse {
+// ingestApi
+export interface IngestMessageResponse {
   reply: string
   ready_for_planning: boolean
 }
 
-export interface ContextFileUploadResponse {
+export interface IngestDocumentResponse {
   document_id: string
   filename: string
   extracted_chars: number
@@ -370,8 +362,10 @@ export interface PitchHistoryResponse {
 // team members
 export interface AddTeamMemberRequest {
   name: string
-  email?: string
   role?: string
+  skills: string[]
+  tech_stack: string[]
+  availability: string
 }
 
 export interface TeamMembersResponse {

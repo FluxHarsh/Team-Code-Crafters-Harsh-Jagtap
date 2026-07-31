@@ -2,14 +2,8 @@ import { useCallback, useRef, useState } from 'react'
 import { UploadCloud, FileText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// v2: File Intake Agent also supports PPT and images — the old list
-// (pdf/docx/txt/md only) silently rejected those client-side before they
-// ever reached the backend.
-const ACCEPTED_EXTENSIONS = [
-  '.pdf', '.docx', '.doc', '.txt', '.md',
-  '.ppt', '.pptx',
-  '.png', '.jpg', '.jpeg', '.webp', '.gif',
-]
+// Real backend only supports pdf/docx/txt/md.
+const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.txt', '.md']
 
 const ACCEPTED_MIME_TYPES = [
   'application/pdf',
@@ -17,12 +11,6 @@ const ACCEPTED_MIME_TYPES = [
   'application/msword',
   'text/plain',
   'text/markdown',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.ms-powerpoint',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
 ]
 
 interface DocumentDropzoneProps {
@@ -52,7 +40,7 @@ export function DocumentDropzone({ onFileSelected, disabled, multiple }: Documen
       const files = Array.from(fileList)
       for (const file of files) {
         if (!isAcceptedFile(file)) {
-          setError(`"${file.name}" isn't a supported file type (PDF, Word, PPT, TXT, MD, or image).`)
+          setError(`"${file.name}" isn't a supported file type (PDF, Word, TXT, or MD).`)
           continue
         }
         onFileSelected(file)
@@ -86,7 +74,7 @@ export function DocumentDropzone({ onFileSelected, disabled, multiple }: Documen
         <p className="text-sm text-text">
           <span className="font-medium text-primary">Click to upload</span> or drag and drop
         </p>
-        <p className="text-xs text-muted">PDF, Word, PPT, TXT, MD, or images</p>
+        <p className="text-xs text-muted">PDF, Word, TXT, or MD</p>
         <input
           ref={inputRef}
           type="file"

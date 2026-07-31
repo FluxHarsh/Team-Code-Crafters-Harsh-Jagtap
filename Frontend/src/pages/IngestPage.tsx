@@ -1,17 +1,16 @@
 import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { projectContextApi } from '@/api'
+import { ingestApi } from '@/api'
 import { useStore } from '@/store'
 import { ChatThread } from '@/components/chat/ChatThread'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { DocumentDropzone } from '@/components/shared/DocumentDropzone'
 import { generateId } from '@/lib/utils'
 
-// Renamed from IngestPage: v2 replaces the deprecated /ingest/message,
-// /ingest/document, /ingest/history trio with /context/message, /context/files,
-// /context/history. Route path also moved from /ingest to /context.
-export function ProjectContextPage() {
+// Hits the real backend's /ingest/message, /ingest/document, /ingest/history
+// trio directly (there is no /context/* surface on the backend).
+export function IngestPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -19,8 +18,8 @@ export function ProjectContextPage() {
   const appendCoachMessage = useStore((s) => s.appendCoachMessage)
 
   const { data: history } = useQuery({
-    queryKey: ['context-history', projectId],
-    queryFn: () => projectContextApi.getHistory(projectId!),
+    queryKey: ['ingest-history', projectId],
+    queryFn: () => ingestApi.getHistory(projectId!),
     enabled: !!projectId,
   })
 
@@ -30,7 +29,7 @@ export function ProjectContextPage() {
   }, [history])
 
   const sendMessage = useMutation({
-    mutationFn: (content: string) => projectContextApi.sendMessage(projectId!, content),
+    mutationFn: (content: string) => ingestApi.sendMessage(projectId!, content),
     onMutate: (content) => {
       appendCoachMessage({ id: generateId(), role: 'user', content, phase: 'project_context' })
     },
@@ -44,12 +43,12 @@ export function ProjectContextPage() {
       if (res.ready_for_planning) {
         navigate(`/projects/${projectId}/plan`)
       }
-      queryClient.invalidateQueries({ queryKey: ['context-history', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['ingest-history', projectId] })
     },
   })
 
-  const uploadFile = useMutation({
-    mutationFn: (file: File) => projectContextApi.uploadFile(projectId!, file),
+  const uploadDocument = useMutation({
+    mutationFn: (file: File) => ingestApi.uploadDocument(projectId!, file),
     onSuccess: (res) => {
       appendCoachMessage({
         id: generateId(),
@@ -70,7 +69,7 @@ export function ProjectContextPage() {
       <ChatThread messages={coachMessages} />
 
       <div className="border-t border-border p-4">
-        <DocumentDropzone onFileSelected={(file) => uploadFile.mutate(file)} disabled={uploadFile.isPending} />
+        <DocumentDropzone onFileSelected={(file) => uploadDocument.mutate(file)} disabled={uploadDocument.isPending} />
       </div>
 
       <ChatInput

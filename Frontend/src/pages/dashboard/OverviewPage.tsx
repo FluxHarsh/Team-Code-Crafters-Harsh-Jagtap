@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useStore } from '@/store'
 import { DashboardSummaryBar } from '@/components/dashboard/DashboardSummaryBar'
+import { BuildDeckPanel } from '@/components/dashboard/BuildDeckPanel'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { RiskPanel } from '@/components/risks/RiskPanel'
 
@@ -18,6 +19,8 @@ export function OverviewPage() {
       </div>
 
       <DashboardSummaryBar projectId={projectId} />
+
+      <BuildDeckPanel projectId={projectId} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

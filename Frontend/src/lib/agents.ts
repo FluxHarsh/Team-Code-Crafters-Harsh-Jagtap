@@ -1,9 +1,6 @@
 import type { AgentMeta } from '@/types'
 
-// v2 roster: 'intake' → 'project_context_builder', 'reprioritizer' removed
-// (Reprioritizer node no longer exists — Risk Watcher now emits
-// planner_suggestion instead of auto-replanning). 'planner_suggestion',
-// 'file_intake', and 'team_assistant' are new.
+// 9-node roster matching the real backend.
 export const AGENT_LIST: AgentMeta[] = [
   {
     key: 'supervisor',
@@ -15,9 +12,9 @@ export const AGENT_LIST: AgentMeta[] = [
     bgColor: 'bg-navy-soft',
   },
   {
-    key: 'project_context_builder',
-    label: 'Project Context Builder',
-    shortLabel: 'PCB',
+    key: 'intake',
+    label: 'Intake',
+    shortLabel: 'INT',
     desc: 'Gathers the problem statement and solution through conversation and uploaded files.',
     loop: 'Planning loop',
     iconColor: 'text-info',
@@ -42,9 +39,9 @@ export const AGENT_LIST: AgentMeta[] = [
     bgColor: 'bg-primary-soft',
   },
   {
-    key: 'planner_suggestion',
-    label: 'Planner Suggestion',
-    shortLabel: 'PSG',
+    key: 'reprioritizer',
+    label: 'Reprioritizer',
+    shortLabel: 'RPR',
     desc: 'Proposes roadmap fixes for the user to accept or dismiss instead of auto-replanning.',
     loop: 'Monitoring loop',
     iconColor: 'text-gold',
@@ -67,15 +64,6 @@ export const AGENT_LIST: AgentMeta[] = [
     loop: 'Monitoring loop',
     iconColor: 'text-danger',
     bgColor: 'bg-danger-soft',
-  },
-  {
-    key: 'file_intake',
-    label: 'File Intake',
-    shortLabel: 'FIL',
-    desc: 'Processes uploaded documents, slides, and images into usable project context.',
-    loop: 'Planning loop',
-    iconColor: 'text-info',
-    bgColor: 'bg-info-soft',
   },
   {
     key: 'pitch_agent',

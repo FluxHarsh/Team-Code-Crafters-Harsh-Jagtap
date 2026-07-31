@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { LandingPage } from '@/pages/LandingPage'
-import { ProjectContextPage } from '@/pages/ProjectContextPage'
+import { IngestPage } from '@/pages/IngestPage'
 import { PlanPage } from '@/pages/PlanPage'
 import { DashboardShell } from '@/components/dashboard/DashboardShell'
 import { OverviewPage } from '@/pages/dashboard/OverviewPage'
@@ -47,9 +47,8 @@ export const router = createBrowserRouter([
     element: <LandingPage />,
   },
   {
-    // v2: /ingest renamed to /context (was IngestPage, now ProjectContextPage)
-    path: '/projects/:projectId/context',
-    element: <ProjectContextPage />,
+    path: '/projects/:projectId/ingest',
+    element: <IngestPage />,
   },
   {
     path: '/projects/:projectId/plan',

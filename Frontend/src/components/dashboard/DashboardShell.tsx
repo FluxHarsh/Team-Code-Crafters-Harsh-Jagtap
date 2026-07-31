@@ -49,9 +49,8 @@ export function DashboardShell() {
       return
     }
     if (!isLoading && project) {
-      // v2: status enum renamed 'intake' → 'project_context'
-      if (project.status === 'project_context') {
-        navigate(`/projects/${projectId}/context`, { replace: true })
+      if (project.status === 'intake') {
+        navigate(`/projects/${projectId}/ingest`, { replace: true })
       } else if (project.status === 'planning') {
         navigate(`/projects/${projectId}/plan`, { replace: true })
       }

@@ -6,12 +6,12 @@ import { projectsApi } from '@/api'
 
 export function LandingPage() {
   const navigate = useNavigate()
-  const [idea, setIdea] = useState('')
+  const [name, setName] = useState('')
 
   const create = useMutation({
-    mutationFn: () => projectsApi.create(idea),
+    mutationFn: () => projectsApi.create(name),
     onSuccess: (res) => {
-      navigate(`/projects/${res.project_id}/context`)
+      navigate(`/projects/${res.project_id}/ingest`)
     },
   })
 
@@ -23,25 +23,24 @@ export function LandingPage() {
           <h1 className="text-2xl font-semibold text-text">Hackathon Coach</h1>
         </div>
         <p className="mb-6 text-center text-sm text-muted">
-          Tell us your idea. We'll scope it, plan it, and keep you on track.
+          Give your project a name. We'll scope it, plan it, and keep you on track.
         </p>
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            if (idea.trim()) create.mutate()
+            if (name.trim()) create.mutate()
           }}
           className="rounded-card border border-border bg-card p-4 shadow-card"
         >
-          <textarea
-            value={idea}
-            onChange={(e) => setIdea(e.target.value)}
-            placeholder="e.g. An AI copilot that helps hackathon teams stay on schedule…"
-            rows={4}
-            className="w-full resize-none rounded-lg border border-border p-3 text-sm outline-none focus:border-primary"
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. HackPilot AI"
+            className="w-full rounded-lg border border-border p-3 text-sm outline-none focus:border-primary"
           />
           <button
             type="submit"
-            disabled={create.isPending || !idea.trim()}
+            disabled={create.isPending || !name.trim()}
             className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {create.isPending ? 'Starting…' : 'Start building'}

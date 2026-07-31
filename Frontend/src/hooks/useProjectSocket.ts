@@ -9,10 +9,7 @@ import type {
   RoadmapTask,
   ChatMessage,
   PlannerSuggestion,
-  GitHubInsight,
   TeamMember,
-  ProjectFile,
-  Project,
 } from '@/types'
 import { generateId } from '@/lib/utils'
 
@@ -35,9 +32,8 @@ export function useProjectSocket(projectId: string | undefined) {
     appendGroupMessage,
     addPlannerSuggestion,
     markPlannerSuggestionAccepted,
-    addGithubInsight,
+    markPlannerSuggestionDismissed,
     upsertTeamMember,
-    upsertFile,
   } = useStore()
 
   const handleEvent = useCallback(
@@ -147,23 +143,9 @@ export function useProjectSocket(projectId: string | undefined) {
           break
         }
 
-        case 'github_insight_created': {
-          const insight = event.payload.insight as GitHubInsight
-          addGithubInsight(insight)
-          break
-        }
-
-        case 'project_context_updated': {
-          // Project moved through the context-gathering flow (was 'intake')
-          queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-          const patch = event.payload as Partial<Project>
-          patchProject(patch)
-          break
-        }
-
-        case 'file_processed': {
-          const file = event.payload.file as ProjectFile
-          upsertFile(file)
+        case 'planner_suggestion_dismissed': {
+          const { suggestion_id } = event.payload as { suggestion_id: string }
+          markPlannerSuggestionDismissed(suggestion_id)
           break
         }
 
@@ -200,9 +182,8 @@ export function useProjectSocket(projectId: string | undefined) {
       appendGroupMessage,
       addPlannerSuggestion,
       markPlannerSuggestionAccepted,
-      addGithubInsight,
-      upsertTeamMember,
-      upsertFile,
+      markPlannerSuggestionDismissed,
+        upsertTeamMember,
     ]
   )
 
