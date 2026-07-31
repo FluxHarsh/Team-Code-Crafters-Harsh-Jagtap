@@ -105,38 +105,46 @@ export interface ProjectFile {
   created_at?: string
 }
 
-export interface GitHubInsight {
-  id: string
-  summary: string
-  related_task?: string
-  severity?: 'info' | 'warn' | 'critical'
-  created_at: string
-}
-
 export interface PlannerSuggestion {
   id: string
-  title: string
+  source: string
+  risk_id?: string | null
+  decision?: string | null
   rationale: string
-  diff_summary?: string
   status: 'pending' | 'accepted' | 'dismissed'
   created_at: string
 }
 
-export interface ScopeCriticFinding {
-  id: string
-  concern: string
-  related_feature?: string
-  severity: 'high' | 'med' | 'low'
+export interface DashboardOverview {
+  project_id: string
+  name: string
+  status: ProjectStatus
+  percent_complete: number
+  hours_remaining: number | null
+  open_risks: number
+  team_size: number
 }
 
-export interface DashboardSummary {
+export interface DashboardKanbanSummary {
   percent_complete: number
-  building_count: number
-  blocked_count: number
+  total_tasks: number
   shipped_count: number
-  total_count: number
   commit_count: number
-  hours_remaining: number
+  counts: { queued: number; building: number; blocked: number; shipped: number }
+}
+
+export interface DashboardKanbanNode {
+  id: string
+  task: string
+  column: 'queued' | 'building' | 'blocked' | 'shipped'
+  owner: string
+  eta: string
+}
+
+export interface DashboardKanbanResponse {
+  summary: DashboardKanbanSummary
+  nodes: DashboardKanbanNode[]
+  edges: { from: string; to: string }[]
 }
 
 export interface Project {
@@ -257,23 +265,17 @@ export interface IngestDocumentResponse {
   extracted_chars: number
 }
 
-// plannerApi (was planApi) — iterative, versioned; no single "chat" endpoint
-export interface PlannerDraftRequest {
-  notes?: string
-}
-
+// plannerApi (was planApi) — v1 backend surface: draft → chat → approve
 export interface PlannerDraftResponse {
-  version: number
   draft_scope: ScopeData
   draft_roadmap: RoadmapTask[]
 }
 
 export interface PlannerFeedbackRequest {
-  feedback: string
+  message: string
 }
 
 export interface PlannerFeedbackResponse {
-  version: number
   reply: string
   draft_scope: ScopeData
   draft_roadmap: RoadmapTask[]
@@ -286,14 +288,15 @@ export interface PlannerApproveResponse {
 }
 
 export interface PlannerHistoryEntry {
-  version: number
-  draft_scope: ScopeData
-  draft_roadmap: RoadmapTask[]
+  id: string
+  reason: string
+  scope_snapshot: ScopeData
+  roadmap_snapshot: RoadmapTask[]
   created_at: string
 }
 
 export interface PlannerHistoryResponse {
-  versions: PlannerHistoryEntry[]
+  revisions: PlannerHistoryEntry[]
 }
 
 // planner suggestions (replaces roadmapApi.replan / risksApi.reprioritize)
@@ -302,13 +305,14 @@ export interface PlannerSuggestionsResponse {
 }
 
 export interface AcceptPlannerSuggestionResponse {
-  accepted: boolean
-  updated_roadmap: RoadmapTask[]
+  decision: string
+  rationale: string
+  roadmap_replanned: boolean
 }
 
-// scope critic
-export interface ScopeCriticRunResponse {
-  findings: ScopeCriticFinding[]
+export interface DismissPlannerSuggestionResponse {
+  id: string
+  status: string
 }
 
 // github
@@ -318,30 +322,34 @@ export interface GitHubConnectResponse {
 }
 
 export interface GitHubInsightsResponse {
-  insights: GitHubInsight[]
+  insights: string[]
+  last_polled_at?: string | null
 }
 
 // chat — split into personal / group
 export interface PersonalChatRequest {
-  content: string
+  message: string
 }
 
 export interface PersonalChatResponse {
-  reply: string
-  answered_by: string
+  reply: string | null
+  answered_by: string | null
 }
 
 export interface GroupChatRequest {
-  content: string
+  message: string
   speaker_name: string
 }
 
 export interface GroupChatResponse {
-  message: ChatMessage
+  reply: string | null
+  answered_by: string | null
+  ai_invoked: boolean
 }
 
 export interface ChatHistoryResponse {
   messages: ChatMessage[]
+  next_cursor?: string | null
 }
 
 // pitch
@@ -350,13 +358,8 @@ export interface PitchResponse {
   generated_at?: string
 }
 
-export interface PitchHistoryEntry {
+export interface PitchGenerateResponse {
   pitch_outline: PitchOutline
-  generated_at: string
-}
-
-export interface PitchHistoryResponse {
-  versions: PitchHistoryEntry[]
 }
 
 // team members
@@ -364,7 +367,6 @@ export interface AddTeamMemberRequest {
   name: string
   role?: string
   skills: string[]
-  tech_stack: string[]
   availability: string
 }
 
@@ -372,20 +374,7 @@ export interface TeamMembersResponse {
   members: TeamMember[]
 }
 
-// files (generic upload surface, not just project-context intake)
-export interface FileUploadResponse {
-  file: ProjectFile
-}
-
-export interface FilesResponse {
-  files: ProjectFile[]
-}
-
 // dashboard aggregation
-export interface DashboardSummaryResponse {
-  summary: DashboardSummary
-  roadmap: RoadmapTask[]
-}
 
 // ─── UI State ────────────────────────────────────────────────────────────────
 

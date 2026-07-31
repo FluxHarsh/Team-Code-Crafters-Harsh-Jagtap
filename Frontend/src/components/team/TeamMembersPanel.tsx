@@ -14,11 +14,11 @@ function parseList(value: string): string[] {
 export function TeamMembersPanel({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient()
   const setTeamMembers = useStore((s) => s.setTeamMembers)
+  const upsertTeamMember = useStore((s) => s.upsertTeamMember)
   const teamMembers = useStore((s) => s.teamMembers)
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
   const [skills, setSkills] = useState('')
-  const [techStack, setTechStack] = useState('')
   const [availability, setAvailability] = useState('')
 
   const { data } = useQuery({
@@ -36,15 +36,13 @@ export function TeamMembersPanel({ projectId }: { projectId: string }) {
         name,
         role: role || undefined,
         skills: parseList(skills),
-        tech_stack: parseList(techStack),
         availability,
       }),
-    onSuccess: (res) => {
-      setTeamMembers(res.members)
+    onSuccess: (member) => {
+      upsertTeamMember(member)
       setName('')
       setRole('')
       setSkills('')
-      setTechStack('')
       setAvailability('')
       queryClient.invalidateQueries({ queryKey: ['team-members', projectId] })
     },
@@ -71,9 +69,6 @@ export function TeamMembersPanel({ projectId }: { projectId: string }) {
               {m.role && <p className="text-xs text-muted">{m.role}</p>}
               {m.skills.length > 0 && (
                 <p className="mt-1 text-[11px] text-muted-2">Skills: {m.skills.join(', ')}</p>
-              )}
-              {m.tech_stack.length > 0 && (
-                <p className="text-[11px] text-muted-2">Stack: {m.tech_stack.join(', ')}</p>
               )}
               {m.availability && (
                 <p className="text-[11px] text-muted-2">Availability: {m.availability}</p>
@@ -120,28 +115,20 @@ export function TeamMembersPanel({ projectId }: { projectId: string }) {
             className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
           />
           <input
-            value={techStack}
-            onChange={(e) => setTechStack(e.target.value)}
-            placeholder="Tech stack (comma separated)"
-            className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-        </div>
-        <div className="flex gap-2">
-          <input
             value={availability}
             onChange={(e) => setAvailability(e.target.value)}
             placeholder="Availability (e.g. full-time this weekend)"
             className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
           />
-          <button
-            type="submit"
-            disabled={addMember.isPending || !name.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            <UserPlus className="h-4 w-4" />
-            Add
-          </button>
         </div>
+        <button
+          type="submit"
+          disabled={addMember.isPending || !name.trim()}
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          <UserPlus className="h-4 w-4" />
+          Add
+        </button>
       </form>
     </div>
   )

@@ -39,6 +39,11 @@ async function request<T>(
     throw new ApiError(res.status, msg)
   }
 
+  // 204 No Content (and other empty bodies) have no JSON to parse.
+  if (res.status === 204 || res.status === 205) {
+    return undefined as T
+  }
+
   return res.json() as Promise<T>
 }
 

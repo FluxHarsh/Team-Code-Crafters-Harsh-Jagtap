@@ -8,7 +8,6 @@ import type {
   Risk,
   RoadmapTask,
   ChatMessage,
-  PlannerSuggestion,
   TeamMember,
 } from '@/types'
 import { generateId } from '@/lib/utils'
@@ -27,13 +26,12 @@ export function useProjectSocket(projectId: string | undefined) {
     updateTask,
     patchProject,
     appendCoachMessage,
-    // v2
     appendPersonalMessage,
     appendGroupMessage,
     addPlannerSuggestion,
     markPlannerSuggestionAccepted,
     markPlannerSuggestionDismissed,
-    upsertTeamMember,
+    setTeamMembers,
   } = useStore()
 
   const handleEvent = useCallback(
@@ -46,20 +44,19 @@ export function useProjectSocket(projectId: string | undefined) {
           break
 
         case 'node_activated': {
-          const { node, trigger, finished_at } = event.payload as {
+          const { node, trigger } = event.payload as {
             node: AgentNodeKey
             trigger: string
-            finished_at?: string
           }
           setActiveNode(node)
-          if (finished_at) {
-            addRun({
-              node,
-              trigger: trigger as AgentRunEntry['trigger'],
-              finished_at,
-              status: 'done',
-            })
-          }
+          // The backend payload has no finished_at, so synthesize one to
+          // populate the AgentPage run history.
+          addRun({
+            node,
+            trigger: trigger as AgentRunEntry['trigger'],
+            finished_at: new Date().toISOString(),
+            status: 'done',
+          })
           break
         }
 
@@ -128,30 +125,49 @@ export function useProjectSocket(projectId: string | undefined) {
         }
 
         case 'planner_suggestion_created': {
-          const suggestion = event.payload.suggestion as PlannerSuggestion
-          addPlannerSuggestion(suggestion)
+          // Backend broadcasts { id, risk_id, decision, rationale }.
+          const { id, risk_id, decision, rationale } = event.payload as {
+            id: string
+            risk_id?: string | null
+            decision?: string | null
+            rationale: string
+          }
+          addPlannerSuggestion({
+            id,
+            source: 'risk_reprioritization',
+            risk_id,
+            decision,
+            rationale,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          })
           break
         }
 
         case 'planner_suggestion_accepted': {
-          const { suggestion_id, updated_roadmap } = event.payload as {
-            suggestion_id: string
-            updated_roadmap?: RoadmapTask[]
-          }
-          markPlannerSuggestionAccepted(suggestion_id)
-          if (updated_roadmap) patchProject({ roadmap: updated_roadmap })
+          // Backend broadcasts { id } only; the roadmap change is applied
+          // server-side, so refetch the project + board.
+          const { id } = event.payload as { id: string }
+          markPlannerSuggestionAccepted(id)
+          queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['dashboard-kanban', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['dashboard-overview', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['planner-suggestions', projectId] })
           break
         }
 
         case 'planner_suggestion_dismissed': {
-          const { suggestion_id } = event.payload as { suggestion_id: string }
-          markPlannerSuggestionDismissed(suggestion_id)
+          // Backend broadcasts { id } only.
+          const { id } = event.payload as { id: string }
+          markPlannerSuggestionDismissed(id)
+          queryClient.invalidateQueries({ queryKey: ['planner-suggestions', projectId] })
           break
         }
 
         case 'team_updated': {
-          const member = event.payload.member as TeamMember
-          upsertTeamMember(member)
+          // Backend broadcasts { team: [...] } — replace the whole list.
+          const { team } = event.payload as { team: TeamMember[] }
+          setTeamMembers(team)
           break
         }
 
@@ -183,7 +199,7 @@ export function useProjectSocket(projectId: string | undefined) {
       addPlannerSuggestion,
       markPlannerSuggestionAccepted,
       markPlannerSuggestionDismissed,
-        upsertTeamMember,
+      setTeamMembers,
     ]
   )
 

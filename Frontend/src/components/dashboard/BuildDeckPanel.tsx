@@ -1,6 +1,7 @@
 import { useRef, useState, useLayoutEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardApi } from '@/api'
+import { useStore } from '@/store'
 import { formatHours, cn } from '@/lib/utils'
 import type { RoadmapTask } from '@/types'
 
@@ -41,13 +42,23 @@ interface ConnectorLine {
 }
 
 export function BuildDeckPanel({ projectId }: { projectId: string }) {
+  const project = useStore((s) => s.project)
+
   const { data } = useQuery({
     queryKey: ['dashboard-kanban', projectId],
     queryFn: () => dashboardApi.kanban(projectId),
   })
 
-  const roadmap = data?.roadmap ?? []
+  const { data: overview } = useQuery({
+    queryKey: ['dashboard-overview', projectId],
+    queryFn: () => dashboardApi.overview(projectId),
+  })
+
+  // Roadmap tasks come from the full project state (GET /projects/{id});
+  // the kanban endpoint only supplies the board-shaped summary/nodes/edges.
+  const roadmap = project?.roadmap ?? []
   const summary = data?.summary
+  const counts = summary?.counts
 
   const containerRef = useRef<HTMLDivElement>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -105,7 +116,7 @@ export function BuildDeckPanel({ projectId }: { projectId: string }) {
     tasks: roadmap.filter((t) => t.status === col.id),
   }))
 
-  const hoursRemaining = summary?.hours_remaining
+  const hoursRemaining = overview?.hours_remaining
   const percentComplete = summary ? Math.round(summary.percent_complete) : 0
 
   return (
@@ -122,9 +133,9 @@ export function BuildDeckPanel({ projectId }: { projectId: string }) {
 
       <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Stat value={`${percentComplete}%`} label="Complete" />
-        <Stat value={summary?.building_count ?? '—'} label="Building" />
-        <Stat value={summary?.blocked_count ?? '—'} label="Blocked" accent="danger" />
-        <Stat value={summary ? `${summary.shipped_count}/${summary.total_count}` : '—'} label="Shipped" />
+        <Stat value={counts?.building ?? '—'} label="Building" />
+        <Stat value={counts?.blocked ?? '—'} label="Blocked" accent="danger" />
+        <Stat value={summary ? `${summary.shipped_count}/${summary.total_tasks}` : '—'} label="Shipped" />
         <Stat value={summary?.commit_count ?? '—'} label="Commits" />
       </div>
 

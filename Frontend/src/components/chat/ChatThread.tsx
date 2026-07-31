@@ -11,9 +11,9 @@ export function ChatThread({ messages }: { messages: ChatMessage[] }) {
 
   return (
     <div className="flex-1 space-y-3 overflow-y-auto p-6">
-      {messages.map((msg) => (
+      {messages.map((msg, i) => (
         <div
-          key={msg.id}
+          key={msg.id ?? `${msg.role}-${i}`}
           className={cn('chat-bubble-enter flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}
         >
           {msg.speaker_name && msg.role === 'user' && (

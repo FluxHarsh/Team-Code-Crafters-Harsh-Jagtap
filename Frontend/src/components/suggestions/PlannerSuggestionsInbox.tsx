@@ -10,7 +10,7 @@ export function PlannerSuggestionsInbox({ projectId }: { projectId: string }) {
   const suggestions = useStore((s) => s.plannerSuggestions)
   const setPlannerSuggestions = useStore((s) => s.setPlannerSuggestions)
   const markAccepted = useStore((s) => s.markPlannerSuggestionAccepted)
-  const patchProject = useStore((s) => s.patchProject)
+  const markDismissed = useStore((s) => s.markPlannerSuggestionDismissed)
 
   const { data } = useQuery({
     queryKey: ['planner-suggestions', projectId],
@@ -23,16 +23,23 @@ export function PlannerSuggestionsInbox({ projectId }: { projectId: string }) {
 
   const accept = useMutation({
     mutationFn: (suggestionId: string) => plannerSuggestionsApi.accept(projectId, suggestionId),
-    onSuccess: (res, suggestionId) => {
+    onSuccess: (_res, suggestionId) => {
       markAccepted(suggestionId)
-      patchProject({ roadmap: res.updated_roadmap })
+      // The backend replans server-side; there's no updated_roadmap in the
+      // response, so refetch the project + board instead of patching.
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kanban', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-overview', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['planner-suggestions', projectId] })
     },
   })
 
   const dismiss = useMutation({
     mutationFn: (suggestionId: string) => plannerSuggestionsApi.dismiss(projectId, suggestionId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['planner-suggestions', projectId] }),
+    onSuccess: (_res, suggestionId) => {
+      markDismissed(suggestionId)
+      queryClient.invalidateQueries({ queryKey: ['planner-suggestions', projectId] })
+    },
   })
 
   const pending = suggestions.filter((s) => s.status === 'pending')
@@ -50,10 +57,9 @@ export function PlannerSuggestionsInbox({ projectId }: { projectId: string }) {
             <div className="flex items-start gap-2">
               <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-gold" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-text">{s.title}</p>
-                <p className="mt-1 text-xs text-muted">{s.rationale}</p>
-                {s.diff_summary && (
-                  <p className="mt-1 font-mono text-[11px] text-muted-2">{s.diff_summary}</p>
+                <p className="text-sm font-medium text-text">{s.rationale}</p>
+                {s.decision && (
+                  <p className="mt-1 text-xs text-muted">{s.decision}</p>
                 )}
                 <p className="mt-2 text-[11px] text-muted-2">{formatRelative(s.created_at)}</p>
               </div>

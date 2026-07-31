@@ -25,18 +25,20 @@ export function PersonalChatPage() {
   }, [data])
 
   const send = useMutation({
-    mutationFn: (content: string) => personalChatApi.send(projectId!, { content }),
+    mutationFn: (content: string) => personalChatApi.send(projectId!, { message: content }),
     onMutate: (content) => {
       appendPersonalMessage({ id: generateId(), role: 'user', content, phase: 'personal' })
     },
     onSuccess: (res) => {
-      appendPersonalMessage({
-        id: generateId(),
-        role: 'agent',
-        content: res.reply,
-        speaker_name: res.answered_by,
-        phase: 'personal',
-      })
+      if (res.reply) {
+        appendPersonalMessage({
+          id: generateId(),
+          role: 'agent',
+          content: res.reply,
+          speaker_name: res.answered_by ?? undefined,
+          phase: 'personal',
+        })
+      }
       queryClient.invalidateQueries({ queryKey: ['personal-chat-history', projectId] })
     },
   })
