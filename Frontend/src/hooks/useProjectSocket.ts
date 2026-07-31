@@ -15,6 +15,7 @@ import { generateId } from '@/lib/utils'
 export function useProjectSocket(projectId: string | undefined) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isIntentionalCloseRef = useRef<boolean>(false)
   const queryClient = useQueryClient()
 
   const {
@@ -206,13 +207,33 @@ export function useProjectSocket(projectId: string | undefined) {
   const connect = useCallback(() => {
     if (!projectId) return
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/projects/${projectId}/updates`)
+    // Close existing socket if open before establishing a new connection
+    if (wsRef.current) {
+      isIntentionalCloseRef.current = true
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
+    isIntentionalCloseRef.current = false
+
+    const envWsUrl = import.meta.env?.VITE_WS_BASE_URL
+    let wsUrl: string
+    if (envWsUrl) {
+      wsUrl = `${envWsUrl}/api/v1/projects/${projectId}/updates`
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      wsUrl = `${protocol}//${window.location.host}/api/v1/projects/${projectId}/updates`
+    }
+
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
       setWsConnected(true)
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current)
+        reconnectTimer.current = null
+      }
     }
 
     ws.onmessage = (e) => {
@@ -226,7 +247,9 @@ export function useProjectSocket(projectId: string | undefined) {
 
     ws.onclose = () => {
       setWsConnected(false)
-      reconnectTimer.current = setTimeout(() => connect(), 3000)
+      if (!isIntentionalCloseRef.current) {
+        reconnectTimer.current = setTimeout(() => connect(), 3000)
+      }
     }
 
     ws.onerror = () => {
@@ -237,9 +260,14 @@ export function useProjectSocket(projectId: string | undefined) {
   useEffect(() => {
     connect()
     return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
+      isIntentionalCloseRef.current = true
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current)
+        reconnectTimer.current = null
+      }
       wsRef.current?.close()
+      wsRef.current = null
       setWsConnected(false)
     }
   }, [connect, setWsConnected])
-}
+}

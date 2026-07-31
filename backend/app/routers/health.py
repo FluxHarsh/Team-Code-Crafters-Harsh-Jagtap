@@ -11,6 +11,11 @@ from app.db.neo4j import ping_neo4j
 router = APIRouter(tags=["health"])
 
 
+@router.get("/healthz/liveness")
+async def liveness() -> dict:
+    return {"status": "ok"}
+
+
 @router.get("/healthz")
 async def healthz(response: Response) -> dict:
     postgres_ok = await ping_postgres()
@@ -25,3 +30,4 @@ async def healthz(response: Response) -> dict:
         "postgres": "ok" if postgres_ok else "unreachable",
         "neo4j": "ok" if neo4j_ok else "unreachable",
     }
+
